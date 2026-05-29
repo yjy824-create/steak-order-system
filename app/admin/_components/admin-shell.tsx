@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { AdminSidebar } from "./admin-sidebar";
 
-type AdminNavKey = "dashboard" | "orders" | "products" | "categories";
+type AdminNavKey = "dashboard" | "kitchen" | "orders" | "products" | "categories";
 
 export function AdminShell({
   active,

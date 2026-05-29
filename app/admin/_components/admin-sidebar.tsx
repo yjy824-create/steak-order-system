@@ -1,9 +1,10 @@
 import Link from "next/link";
 
-type AdminNavKey = "dashboard" | "orders" | "products" | "categories";
+type AdminNavKey = "dashboard" | "kitchen" | "orders" | "products" | "categories";
 
 const navItems: Array<{ key: AdminNavKey; href: string; label: string; mark: string }> = [
   { key: "dashboard", href: "/admin", label: "首页", mark: "首" },
+  { key: "kitchen", href: "/admin/kitchen", label: "厨房出餐", mark: "厨" },
   { key: "orders", href: "/admin/orders", label: "订单管理", mark: "单" },
   { key: "products", href: "/admin/products", label: "商品管理", mark: "品" },
   { key: "categories", href: "/admin/categories", label: "分类管理", mark: "类" },
