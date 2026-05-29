@@ -6,7 +6,9 @@ import { useState } from "react";
 import { BottomNav } from "../_components/bottom-nav";
 import { menuItems, type MenuItem } from "../_data/menu";
 
-const categories = ["全部", "牛排", "主食", "汤品", "饮料"];
+type CategoryFilter = "全部" | MenuItem["category"];
+
+const categories: CategoryFilter[] = ["全部", "牛排", "主食", "汤品", "饮料"];
 const donenessOptions = ["三分熟", "五分熟", "七分熟", "全熟"];
 const sauceOptions = ["黑胡椒酱", "蘑菇酱", "综合酱"];
 const addOnOptions = [
@@ -15,6 +17,8 @@ const addOnOptions = [
 ];
 
 export default function MenuPage() {
+  const [activeCategory, setActiveCategory] = useState<CategoryFilter>("全部");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [doneness, setDoneness] = useState("七分熟");
   const [sauce, setSauce] = useState("黑胡椒酱");
@@ -47,6 +51,22 @@ export default function MenuPage() {
     closeProduct();
   };
 
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredItems = menuItems.filter((item) => {
+    const matchesCategory =
+      activeCategory === "全部" || item.category === activeCategory;
+    const searchText = `${item.name} ${item.description} ${item.category}`.toLowerCase();
+    const matchesSearch =
+      normalizedSearch.length === 0 || searchText.includes(normalizedSearch);
+
+    return matchesCategory && matchesSearch;
+  });
+
+  const clearFilters = () => {
+    setActiveCategory("全部");
+    setSearchQuery("");
+  };
+
   return (
     <main className="min-h-screen bg-[#f8f0e8] pb-36 text-[#2a1208]">
       <section className="mx-auto min-h-screen w-full max-w-md bg-[#fffaf5] px-5 pt-8 shadow-2xl shadow-[#3b1a0b]/10">
@@ -60,9 +80,15 @@ export default function MenuPage() {
           </div>
         </header>
 
-        <label className="mt-5 flex h-12 items-center rounded-2xl border border-[#ead8c8] bg-white px-4 text-sm text-[#8f8075]">
-          搜索牛排、汤品或饮料
-          <input className="sr-only" aria-label="搜索菜单" />
+        <label className="mt-5 flex h-12 items-center rounded-2xl border border-[#ead8c8] bg-white px-4 text-sm text-[#8f8075] focus-within:border-[#b86a32]">
+          <span className="mr-2 text-[#5a210b]">搜</span>
+          <input
+            aria-label="搜索菜单"
+            className="min-w-0 flex-1 bg-transparent font-semibold text-[#2a1208] outline-none placeholder:text-[#a99789]"
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="搜索牛排、汤品或饮料"
+            value={searchQuery}
+          />
         </label>
 
         <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
@@ -70,10 +96,11 @@ export default function MenuPage() {
             <button
               key={category}
               className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${
-                category === "全部"
+                category === activeCategory
                   ? "bg-[#5a210b] text-white"
                   : "border border-[#ead8c8] bg-white text-[#5b473c]"
               }`}
+              onClick={() => setActiveCategory(category)}
               type="button"
             >
               {category}
@@ -83,8 +110,9 @@ export default function MenuPage() {
 
         <section className="mt-4">
           <h2 className="text-lg font-black">精选餐点</h2>
-          <div className="mt-3 space-y-3">
-            {menuItems.map((item) => (
+          {filteredItems.length > 0 ? (
+            <div className="mt-3 space-y-3">
+              {filteredItems.map((item) => (
               <article
                 key={item.id}
                 className="flex cursor-pointer gap-3 rounded-2xl border border-[#f1e3d8] bg-white p-3 shadow-sm transition active:scale-[0.99]"
@@ -123,8 +151,26 @@ export default function MenuPage() {
                   <p className="mt-3 font-black text-[#c01818]">${item.price}</p>
                 </div>
               </article>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-6 rounded-3xl border border-dashed border-[#d9bda8] bg-white px-5 py-10 text-center shadow-sm">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#fbf0e6] text-sm font-black text-[#8b3a14]">
+                空
+              </div>
+              <h3 className="mt-5 text-lg font-black">没有找到符合的餐点</h3>
+              <p className="mt-2 text-sm text-[#7b6355]">
+                可以换个关键字，或回到全部分类重新看看。
+              </p>
+              <button
+                className="mt-5 rounded-full bg-[#5a210b] px-5 py-3 text-sm font-black text-white shadow-md shadow-[#5a210b]/20"
+                onClick={clearFilters}
+                type="button"
+              >
+                清除筛选
+              </button>
+            </div>
+          )}
         </section>
       </section>
 
