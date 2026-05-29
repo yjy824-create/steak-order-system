@@ -1,46 +1,144 @@
-import Link from "next/link";
-import { BottomNav } from "../_components/bottom-nav";
-import { cartItems } from "../_data/menu";
+"use client";
 
-const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-const serviceFee = Math.round(subtotal * 0.1);
-const total = subtotal + serviceFee;
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { BottomNav } from "../_components/bottom-nav";
+import { getCartItemKey, useCart, type CartItem } from "../_contexts/cart-context";
+
+function getItemSubtotal(item: CartItem) {
+  const addonsTotal = item.addons.reduce((sum, addon) => sum + addon.price, 0);
+
+  return (item.price + addonsTotal) * item.quantity;
+}
 
 export default function CartPage() {
+  const router = useRouter();
+  const { clearCart, items, removeItem, subtotal, updateQuantity } = useCart();
+  const serviceFee = Math.round(subtotal * 0.1);
+  const total = Math.round(subtotal + serviceFee);
+
+  const handleSubmitOrder = () => {
+    clearCart();
+    router.push("/order-success");
+  };
+
+  if (items.length === 0) {
+    return (
+      <main className="min-h-screen bg-[#f8f0e8] pb-28 text-[#2a1208]">
+        <section className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-[#fffaf5] px-5 pt-8 shadow-2xl shadow-[#3b1a0b]/10">
+          <h1 className="text-center text-2xl font-black">购物车</h1>
+          <div className="mt-24 rounded-3xl border border-dashed border-[#d9bda8] bg-white px-5 py-12 text-center shadow-sm">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#fbf0e6] text-sm font-black text-[#8b3a14]">
+              空
+            </div>
+            <h2 className="mt-5 text-xl font-black">购物车为空</h2>
+            <p className="mt-2 text-sm text-[#7b6355]">先回菜单挑几份喜欢的餐点吧。</p>
+            <Link
+              href="/menu"
+              className="mt-6 inline-flex h-12 items-center justify-center rounded-full bg-[#5a210b] px-6 text-sm font-black text-white shadow-md shadow-[#5a210b]/20"
+            >
+              返回菜单
+            </Link>
+          </div>
+        </section>
+        <BottomNav active="cart" />
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#f8f0e8] pb-28 text-[#2a1208]">
       <section className="mx-auto min-h-screen w-full max-w-md bg-[#fffaf5] px-5 pt-8 shadow-2xl shadow-[#3b1a0b]/10">
-        <h1 className="text-center text-2xl font-black">购物车</h1>
+        <div className="flex items-center justify-between">
+          <div className="w-16" />
+          <h1 className="text-center text-2xl font-black">购物车</h1>
+          <button
+            className="w-16 text-right text-sm font-bold text-[#8b3a14]"
+            onClick={clearCart}
+            type="button"
+          >
+            清空
+          </button>
+        </div>
 
         <section className="mt-6">
           <h2 className="font-bold">餐点明细</h2>
           <div className="mt-3 overflow-hidden rounded-2xl border border-[#f1e3d8] bg-white">
-            {cartItems.map((item) => (
-              <article
-                key={item.id}
-                className="flex gap-3 border-b border-[#f1e3d8] p-3 last:border-b-0"
-              >
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#8b3515,#2a1208)] text-xs font-black text-[#ffd7a6]">
-                  {item.category}
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-bold">{item.name}</h3>
-                  <p className="mt-1 text-sm text-[#7b6355]">{item.description}</p>
-                  <div className="mt-3 flex items-center justify-between">
+            {items.map((item) => {
+              const itemKey = getCartItemKey(item);
+              const itemSubtotal = getItemSubtotal(item);
+
+              return (
+                <article
+                  key={itemKey}
+                  className="border-b border-[#f1e3d8] p-4 last:border-b-0"
+                >
+                  <div className="flex gap-3">
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#8b3515,#2a1208)] text-xs font-black text-[#ffd7a6]">
+                      餐点
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-bold">{item.name}</h3>
+                          <p className="mt-1 text-sm text-[#7b6355]">
+                            {item.selectedDoneness}・{item.selectedSauce}
+                          </p>
+                        </div>
+                        <button
+                          className="text-sm font-bold text-[#8b3a14]"
+                          onClick={() => removeItem(itemKey)}
+                          type="button"
+                        >
+                          删除
+                        </button>
+                      </div>
+
+                      {item.addons.length > 0 ? (
+                        <div className="mt-2 space-y-1 text-sm text-[#7b6355]">
+                          {item.addons.map((addon) => (
+                            <p key={`${itemKey}-${addon.name}`}>
+                              加购：{addon.name} +${addon.price}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {item.note ? (
+                        <p className="mt-2 rounded-xl bg-[#fbf4ed] px-3 py-2 text-sm text-[#7b6355]">
+                          备注：{item.note}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <button className="h-8 w-8 rounded-full border border-[#ead8c8]" type="button">
+                      <button
+                        className="h-8 w-8 rounded-full border border-[#ead8c8] font-black disabled:text-[#c9b9aa]"
+                        disabled={item.quantity <= 1}
+                        onClick={() => updateQuantity(itemKey, item.quantity - 1)}
+                        type="button"
+                      >
                         -
                       </button>
-                      <span className="w-6 text-center font-bold">{item.quantity}</span>
-                      <button className="h-8 w-8 rounded-full border border-[#ead8c8]" type="button">
+                      <span className="w-8 text-center font-bold">{item.quantity}</span>
+                      <button
+                        className="h-8 w-8 rounded-full border border-[#ead8c8] font-black"
+                        onClick={() => updateQuantity(itemKey, item.quantity + 1)}
+                        type="button"
+                      >
                         +
                       </button>
                     </div>
-                    <p className="font-black text-[#c01818]">${item.price}</p>
+                    <div className="text-right">
+                      <p className="text-xs text-[#7b6355]">小计</p>
+                      <p className="font-black text-[#c01818]">${itemSubtotal}</p>
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         </section>
 
@@ -63,10 +161,16 @@ export default function CartPage() {
           <div>
             <h2 className="font-bold">用餐方式</h2>
             <div className="mt-3 grid grid-cols-2 gap-3">
-              <button className="rounded-2xl border border-[#5a210b] bg-white px-4 py-3 font-bold text-[#5a210b]" type="button">
+              <button
+                className="rounded-2xl border border-[#5a210b] bg-white px-4 py-3 font-bold text-[#5a210b]"
+                type="button"
+              >
                 内用
               </button>
-              <button className="rounded-2xl border border-[#ead8c8] bg-white px-4 py-3 font-bold text-[#7b6355]" type="button">
+              <button
+                className="rounded-2xl border border-[#ead8c8] bg-white px-4 py-3 font-bold text-[#7b6355]"
+                type="button"
+              >
                 外带自取
               </button>
             </div>
@@ -89,12 +193,13 @@ export default function CartPage() {
           </label>
         </section>
 
-        <Link
-          href="/order-success"
-          className="mt-6 flex h-14 items-center justify-center rounded-2xl bg-[#5a210b] text-lg font-black text-white shadow-lg shadow-[#5a210b]/25"
+        <button
+          className="mt-6 flex h-14 w-full items-center justify-center rounded-2xl bg-[#5a210b] text-lg font-black text-white shadow-lg shadow-[#5a210b]/25"
+          onClick={handleSubmitOrder}
+          type="button"
         >
           {`送出订单・$${total}`}
-        </Link>
+        </button>
       </section>
       <BottomNav active="cart" />
     </main>

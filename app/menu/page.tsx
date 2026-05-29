@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { BottomNav } from "../_components/bottom-nav";
+import { useCart } from "../_contexts/cart-context";
 import { menuItems, type MenuItem } from "../_data/menu";
 
 type CategoryFilter = "全部" | MenuItem["category"];
@@ -17,20 +18,22 @@ const addOnOptions = [
 ];
 
 export default function MenuPage() {
+  const { addItem, subtotal, totalQuantity } = useCart();
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>("全部");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [doneness, setDoneness] = useState("七分熟");
   const [sauce, setSauce] = useState("黑胡椒酱");
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
+  const [note, setNote] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [cartCount, setCartCount] = useState(3);
 
   const openProduct = (item: MenuItem) => {
     setSelectedItem(item);
     setDoneness("七分熟");
     setSauce("黑胡椒酱");
     setSelectedAddOns([]);
+    setNote("");
     setQuantity(1);
   };
 
@@ -47,7 +50,22 @@ export default function MenuPage() {
   };
 
   const handleAddToCart = () => {
-    setCartCount((count) => count + 1);
+    if (!selectedItem) {
+      return;
+    }
+
+    addItem({
+      id: selectedItem.id,
+      name: selectedItem.name,
+      price: selectedItem.price,
+      quantity,
+      selectedDoneness: doneness,
+      selectedSauce: sauce,
+      addons: addOnOptions.filter((option) =>
+        selectedAddOns.includes(option.name),
+      ),
+      note,
+    });
     closeProduct();
   };
 
@@ -178,8 +196,8 @@ export default function MenuPage() {
         href="/cart"
         className="fixed inset-x-5 bottom-24 z-30 mx-auto flex h-14 max-w-md items-center justify-between rounded-2xl bg-[#5a210b] px-5 font-bold text-white shadow-xl shadow-[#5a210b]/25"
       >
-        <span>购物车（{cartCount}）</span>
-        <span>$616 进入确认</span>
+        <span>购物车（{totalQuantity}）</span>
+        <span>${subtotal} 进入确认</span>
       </Link>
 
       {selectedItem ? (
@@ -187,10 +205,12 @@ export default function MenuPage() {
           addOns={selectedAddOns}
           doneness={doneness}
           item={selectedItem}
+          note={note}
           quantity={quantity}
           sauce={sauce}
           onAddToCart={handleAddToCart}
           onClose={closeProduct}
+          onNoteChange={setNote}
           onQuantityChange={setQuantity}
           onSauceChange={setSauce}
           onDonenessChange={setDoneness}
@@ -207,11 +227,13 @@ function ProductDetailSheet({
   addOns,
   doneness,
   item,
+  note,
   quantity,
   sauce,
   onAddToCart,
   onClose,
   onDonenessChange,
+  onNoteChange,
   onQuantityChange,
   onSauceChange,
   onToggleAddOn,
@@ -219,11 +241,13 @@ function ProductDetailSheet({
   addOns: string[];
   doneness: string;
   item: MenuItem;
+  note: string;
   quantity: number;
   sauce: string;
   onAddToCart: () => void;
   onClose: () => void;
   onDonenessChange: (value: string) => void;
+  onNoteChange: (value: string) => void;
   onQuantityChange: (value: number) => void;
   onSauceChange: (value: string) => void;
   onToggleAddOn: (value: string) => void;
@@ -304,7 +328,9 @@ function ProductDetailSheet({
           <span className="text-sm font-black">备注</span>
           <textarea
             className="mt-2 h-20 w-full resize-none rounded-2xl border border-[#ead8c8] bg-white px-4 py-3 text-sm outline-none placeholder:text-[#b4a395]"
+            onChange={(event) => onNoteChange(event.target.value)}
             placeholder="例如：少酱、不要洋葱、餐具另外放"
+            value={note}
           />
         </label>
 
