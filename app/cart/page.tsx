@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { BottomNav } from "../_components/bottom-nav";
 import { getCartItemKey, useCart, type CartItem } from "../_contexts/cart-context";
+import { useOrder } from "../_contexts/order-context";
 
 function getItemSubtotal(item: CartItem) {
   const addonsTotal = item.addons.reduce((sum, addon) => sum + addon.price, 0);
@@ -14,10 +16,35 @@ function getItemSubtotal(item: CartItem) {
 export default function CartPage() {
   const router = useRouter();
   const { clearCart, items, removeItem, subtotal, updateQuantity } = useCart();
+  const { setLastOrder } = useOrder();
+  const [diningType, setDiningType] = useState("内用");
+  const [tableNumber, setTableNumber] = useState("A5 桌");
+  const [orderNote, setOrderNote] = useState("");
   const serviceFee = Math.round(subtotal * 0.1);
   const total = Math.round(subtotal + serviceFee);
 
   const handleSubmitOrder = () => {
+    const orderNumber = `#${String(Date.now()).slice(-4)}`;
+
+    setLastOrder({
+      orderNumber,
+      diningType,
+      tableNumber: tableNumber.trim() || "未填写",
+      note: orderNote.trim(),
+      items,
+      subtotal,
+      serviceFee,
+      total,
+      status: "制作中",
+      estimatedTime: "15-20分钟",
+      createdAt: new Date().toLocaleString("zh-TW", {
+        hour12: false,
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    });
     clearCart();
     router.push("/order-success");
   };
@@ -162,13 +189,23 @@ export default function CartPage() {
             <h2 className="font-bold">用餐方式</h2>
             <div className="mt-3 grid grid-cols-2 gap-3">
               <button
-                className="rounded-2xl border border-[#5a210b] bg-white px-4 py-3 font-bold text-[#5a210b]"
+                className={`rounded-2xl border px-4 py-3 font-bold ${
+                  diningType === "内用"
+                    ? "border-[#5a210b] bg-white text-[#5a210b]"
+                    : "border-[#ead8c8] bg-white text-[#7b6355]"
+                }`}
+                onClick={() => setDiningType("内用")}
                 type="button"
               >
                 内用
               </button>
               <button
-                className="rounded-2xl border border-[#ead8c8] bg-white px-4 py-3 font-bold text-[#7b6355]"
+                className={`rounded-2xl border px-4 py-3 font-bold ${
+                  diningType === "外带自取"
+                    ? "border-[#5a210b] bg-white text-[#5a210b]"
+                    : "border-[#ead8c8] bg-white text-[#7b6355]"
+                }`}
+                onClick={() => setDiningType("外带自取")}
                 type="button"
               >
                 外带自取
@@ -180,7 +217,8 @@ export default function CartPage() {
             <span className="font-bold">桌号</span>
             <input
               className="mt-2 h-12 w-full rounded-2xl border border-[#ead8c8] bg-white px-4 outline-none"
-              defaultValue="A5 桌"
+              onChange={(event) => setTableNumber(event.target.value)}
+              value={tableNumber}
             />
           </label>
 
@@ -188,7 +226,9 @@ export default function CartPage() {
             <span className="font-bold">备注</span>
             <textarea
               className="mt-2 h-20 w-full resize-none rounded-2xl border border-[#ead8c8] bg-white px-4 py-3 outline-none"
+              onChange={(event) => setOrderNote(event.target.value)}
               placeholder="例如：不要洋葱、少酱等"
+              value={orderNote}
             />
           </label>
         </section>
