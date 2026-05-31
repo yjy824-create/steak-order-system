@@ -90,7 +90,8 @@ const products = [
     categoryId: "steak",
     price: 320,
     description: "油花均匀、肉香浓郁，搭配经典牛排酱汁。",
-    imageUrl: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=900&q=80",
     isAvailable: true,
     isRecommended: true,
     sortOrder: 1,
@@ -102,7 +103,8 @@ const products = [
     categoryId: "steak",
     price: 450,
     description: "口感细嫩、低脂清爽，适合喜欢柔软肉质的顾客。",
-    imageUrl: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1558030006-450675393462?auto=format&fit=crop&w=900&q=80",
     isAvailable: true,
     isRecommended: true,
     sortOrder: 2,
@@ -114,7 +116,8 @@ const products = [
     categoryId: "steak",
     price: 360,
     description: "浓郁黑胡椒香气，经典台式牛排风味。",
-    imageUrl: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=900&q=80",
     isAvailable: true,
     isRecommended: false,
     sortOrder: 3,
@@ -126,7 +129,8 @@ const products = [
     categoryId: "steak",
     price: 520,
     description: "厚切多汁、肉香饱满，是招牌推荐餐点。",
-    imageUrl: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=900&q=80",
     isAvailable: true,
     isRecommended: true,
     sortOrder: 4,
@@ -138,7 +142,8 @@ const products = [
     categoryId: "main",
     price: 120,
     description: "热腾腾铁板面，黑胡椒香气十足。",
-    imageUrl: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=900&q=80",
     isAvailable: true,
     isRecommended: false,
     sortOrder: 5,
@@ -150,7 +155,8 @@ const products = [
     categoryId: "main",
     price: 180,
     description: "奶香浓郁，搭配培根与焗烤起司。",
-    imageUrl: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1604909052743-94e838986d24?auto=format&fit=crop&w=900&q=80",
     isAvailable: true,
     isRecommended: false,
     sortOrder: 6,
@@ -162,7 +168,8 @@ const products = [
     categoryId: "soup",
     price: 80,
     description: "香甜玉米与奶油汤底，温暖开胃。",
-    imageUrl: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=900&q=80",
     isAvailable: true,
     isRecommended: false,
     sortOrder: 7,
@@ -174,7 +181,8 @@ const products = [
     categoryId: "salad",
     price: 130,
     description: "清爽生菜、面包丁与凯撒酱，平衡牛排餐点。",
-    imageUrl: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1546793665-c74683f339c1?auto=format&fit=crop&w=900&q=80",
     isAvailable: true,
     isRecommended: false,
     sortOrder: 8,
@@ -186,7 +194,8 @@ const products = [
     categoryId: "drink",
     price: 30,
     description: "冰凉畅快，适合搭配牛排与主食。",
-    imageUrl: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=900&q=80",
     isAvailable: true,
     isRecommended: false,
     sortOrder: 9,
@@ -198,7 +207,8 @@ const products = [
     categoryId: "drink",
     price: 35,
     description: "清爽茶香，甜度固定。",
-    imageUrl: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=900&q=80",
     isAvailable: true,
     isRecommended: false,
     sortOrder: 10,
