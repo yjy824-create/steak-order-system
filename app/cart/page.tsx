@@ -88,6 +88,7 @@ export default function CartPage() {
       });
 
       setLastOrder({
+        firestoreId: firestoreDocumentId,
         firestoreDocumentId,
         orderNumber,
         diningType,

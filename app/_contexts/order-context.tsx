@@ -10,6 +10,7 @@ import {
 import type { CartItem } from "./cart-context";
 
 export type Order = {
+  firestoreId?: string;
   firestoreDocumentId?: string;
   orderNumber: string;
   diningType: string;

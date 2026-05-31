@@ -55,6 +55,15 @@ export default function OrderSuccessPage() {
           <p className="mt-2 text-2xl font-black text-[#c01818]">
             ${lastOrder.total}
           </p>
+          {lastOrder.firestoreId || lastOrder.firestoreDocumentId ? (
+            <>
+              <div className="my-5 h-px bg-[#f1e3d8]" />
+              <p className="text-sm font-bold text-[#7b6355]">订单追踪 ID</p>
+              <p className="mt-2 break-all text-sm font-black text-[#5a210b]">
+                {lastOrder.firestoreId || lastOrder.firestoreDocumentId}
+              </p>
+            </>
+          ) : null}
         </section>
 
         <div className="mt-auto space-y-3 pb-6 pt-8">
