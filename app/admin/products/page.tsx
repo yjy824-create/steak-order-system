@@ -456,9 +456,7 @@ export default function AdminProductsPage() {
                 {filteredProducts.map((product) => (
                   <tr key={product.id}>
                     <td className="px-4 py-3">
-                      <div className="flex h-12 w-16 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#8b3515,#2a1208)] text-xs font-black text-[#ffd7a6]">
-                        {product.imageUrl ? "图" : "餐"}
-                      </div>
+                      <ProductThumbnail product={product} />
                     </td>
                     <td className="px-4 py-3">
                       <p className="font-black">{product.name}</p>
@@ -553,6 +551,28 @@ function StatCard({
       <p className="text-sm font-black text-[#8b7565]">{label}</p>
       <p className={`mt-3 text-4xl font-black ${tone}`}>{value}</p>
     </article>
+  );
+}
+
+function ProductThumbnail({ product }: { product: Product }) {
+  const hasImageUrl = product.imageUrl.trim().length > 0;
+
+  if (hasImageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        alt={product.name}
+        className="h-12 w-16 rounded-xl object-cover"
+        loading="lazy"
+        src={product.imageUrl}
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-12 w-16 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#8b3515,#2a1208)] text-xs font-black text-[#ffd7a6]">
+      无图片
+    </div>
   );
 }
 
@@ -659,7 +679,7 @@ function ProductModal({
           </label>
 
           <label className="block md:col-span-2">
-            <span className="text-sm font-black">图片 URL</span>
+            <span className="text-sm font-black">商品图片 URL</span>
             <input
               className="mt-2 h-11 w-full rounded-xl border border-[#ead8c8] px-4 outline-none disabled:bg-[#f7f2ed]"
               disabled={isProcessing}
