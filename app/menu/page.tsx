@@ -316,9 +316,7 @@ export default function MenuPage() {
                   role="button"
                   tabIndex={0}
                 >
-                  <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#8b3515,#2a1208)] text-xs font-black text-[#ffd7a6]">
-                    {item.category}
-                  </div>
+                  <ProductArtwork item={item} variant="card" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -473,13 +471,7 @@ function ProductDetailSheet({
           </button>
         </div>
 
-        <div className="mt-5 flex items-end justify-between rounded-3xl bg-[linear-gradient(145deg,#8b3515,#2a1208)] p-5 text-white">
-          <div>
-            <p className="text-sm text-[#ffd7a6]">精选餐点</p>
-            <p className="mt-2 text-5xl font-black">餐点</p>
-          </div>
-          <p className="text-2xl font-black text-[#ffd7a6]">${item.price}</p>
-        </div>
+        <ProductArtwork item={item} variant="detail" />
 
         <OptionGroup title="熟度选择">
           {donenessOptions.map((option) => (
@@ -554,6 +546,57 @@ function ProductDetailSheet({
           {`加入购物车・$${total}`}
         </button>
       </section>
+    </div>
+  );
+}
+
+function ProductArtwork({
+  item,
+  variant,
+}: {
+  item: MenuItem;
+  variant: "card" | "detail";
+}) {
+  const hasImageUrl = item.imageUrl.trim().length > 0;
+
+  if (variant === "card") {
+    if (hasImageUrl) {
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          alt={item.name}
+          className="h-24 w-24 shrink-0 rounded-xl object-cover"
+          loading="lazy"
+          src={item.imageUrl}
+        />
+      );
+    }
+
+    return (
+      <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#8b3515,#2a1208)] text-xs font-black text-[#ffd7a6]">
+        {item.category}
+      </div>
+    );
+  }
+
+  if (hasImageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        alt={item.name}
+        className="mt-5 h-56 w-full rounded-3xl object-cover"
+        src={item.imageUrl}
+      />
+    );
+  }
+
+  return (
+    <div className="mt-5 flex items-end justify-between rounded-3xl bg-[linear-gradient(145deg,#8b3515,#2a1208)] p-5 text-white">
+      <div>
+        <p className="text-sm text-[#ffd7a6]">精选餐点</p>
+        <p className="mt-2 text-5xl font-black">餐点</p>
+      </div>
+      <p className="text-2xl font-black text-[#ffd7a6]">${item.price}</p>
     </div>
   );
 }
