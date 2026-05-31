@@ -1,15 +1,56 @@
 "use client";
 
+import {
+  collection,
+  onSnapshot,
+  query,
+  where,
+} from "firebase/firestore";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BottomNav } from "../_components/bottom-nav";
 import { useCart } from "../_contexts/cart-context";
-import { menuItems, type MenuItem } from "../_data/menu";
+import { db } from "@/lib/firebase";
 
-type CategoryFilter = "全部" | MenuItem["category"];
+type MenuCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  sortOrder: number;
+};
 
-const categories: CategoryFilter[] = ["全部", "牛排", "主食", "汤品", "饮料"];
+type FirestoreCategoryData = {
+  name?: string;
+  slug?: string;
+  sortOrder?: number;
+  isVisible?: boolean;
+};
+
+type MenuItem = {
+  id: string;
+  cartId: number;
+  name: string;
+  category: string;
+  categoryId: string;
+  description: string;
+  price: number;
+  imageUrl: string;
+  isRecommended: boolean;
+  sortOrder: number;
+};
+
+type FirestoreProductData = {
+  name?: string;
+  category?: string;
+  categoryId?: string;
+  description?: string;
+  imageUrl?: string;
+  price?: number;
+  isRecommended?: boolean;
+  sortOrder?: number;
+};
+
 const donenessOptions = ["三分熟", "五分熟", "七分熟", "全熟"];
 const sauceOptions = ["黑胡椒酱", "蘑菇酱", "综合酱"];
 const addOnOptions = [
@@ -17,9 +58,58 @@ const addOnOptions = [
   { name: "可乐", price: 30 },
 ];
 
+function getStableCartId(id: string) {
+  return Array.from(id).reduce(
+    (hash, char) => (hash * 31 + char.charCodeAt(0)) % 2_147_483_647,
+    7,
+  );
+}
+
+function mapCategoryDocument(
+  id: string,
+  data: FirestoreCategoryData,
+): MenuCategory {
+  return {
+    id,
+    name: data.name || "未命名分类",
+    slug: data.slug || id,
+    sortOrder: typeof data.sortOrder === "number" ? data.sortOrder : 0,
+  };
+}
+
+function mapProductDocument(id: string, data: FirestoreProductData): MenuItem {
+  return {
+    id,
+    cartId: getStableCartId(id),
+    name: data.name || "未命名商品",
+    category: data.category || "未分类",
+    categoryId: data.categoryId || "",
+    description: data.description || "",
+    imageUrl: data.imageUrl || "",
+    price: typeof data.price === "number" ? data.price : 0,
+    isRecommended:
+      typeof data.isRecommended === "boolean" ? data.isRecommended : false,
+    sortOrder: typeof data.sortOrder === "number" ? data.sortOrder : 0,
+  };
+}
+
+function sortBySortOrder<T extends { sortOrder: number }>(items: T[]) {
+  return [...items].sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return JSON.stringify(error);
+}
+
 export default function MenuPage() {
   const { addItem, subtotal, totalQuantity } = useCart();
-  const [activeCategory, setActiveCategory] = useState<CategoryFilter>("全部");
+  const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [activeCategory, setActiveCategory] = useState("全部");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [doneness, setDoneness] = useState("七分熟");
@@ -27,6 +117,70 @@ export default function MenuPage() {
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [isProductsLoading, setIsProductsLoading] = useState(true);
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    const productsQuery = query(
+      collection(db, "products"),
+      where("isAvailable", "==", true),
+    );
+
+    const unsubscribe = onSnapshot(
+      productsQuery,
+      (snapshot) => {
+        setMenuItems(sortBySortOrder(
+          snapshot.docs.map((productDoc) =>
+            mapProductDocument(
+              productDoc.id,
+              productDoc.data() as FirestoreProductData,
+            ),
+          ),
+        ));
+        setIsProductsLoading(false);
+      },
+      (error) => {
+        setErrorMessage(getErrorMessage(error));
+        setIsProductsLoading(false);
+      },
+    );
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const categoriesQuery = query(
+      collection(db, "categories"),
+      where("isVisible", "==", true),
+    );
+
+    const unsubscribe = onSnapshot(
+      categoriesQuery,
+      (snapshot) => {
+        setCategories(sortBySortOrder(
+          snapshot.docs.map((categoryDoc) =>
+            mapCategoryDocument(
+              categoryDoc.id,
+              categoryDoc.data() as FirestoreCategoryData,
+            ),
+          ),
+        ));
+        setIsCategoriesLoading(false);
+      },
+      (error) => {
+        setErrorMessage(getErrorMessage(error));
+        setIsCategoriesLoading(false);
+      },
+    );
+
+    return unsubscribe;
+  }, []);
+
+  const categoryButtons = useMemo(
+    () => ["全部", ...categories.map((category) => category.name)],
+    [categories],
+  );
 
   const openProduct = (item: MenuItem) => {
     setSelectedItem(item);
@@ -55,7 +209,7 @@ export default function MenuPage() {
     }
 
     addItem({
-      id: selectedItem.id,
+      id: selectedItem.cartId,
       name: selectedItem.name,
       price: selectedItem.price,
       quantity,
@@ -73,7 +227,8 @@ export default function MenuPage() {
   const filteredItems = menuItems.filter((item) => {
     const matchesCategory =
       activeCategory === "全部" || item.category === activeCategory;
-    const searchText = `${item.name} ${item.description} ${item.category}`.toLowerCase();
+    const searchText =
+      `${item.name} ${item.description} ${item.category}`.toLowerCase();
     const matchesSearch =
       normalizedSearch.length === 0 || searchText.includes(normalizedSearch);
 
@@ -84,6 +239,8 @@ export default function MenuPage() {
     setActiveCategory("全部");
     setSearchQuery("");
   };
+
+  const isLoading = isProductsLoading || isCategoriesLoading;
 
   return (
     <main className="min-h-screen bg-[#f8f0e8] pb-36 text-[#2a1208]">
@@ -110,7 +267,7 @@ export default function MenuPage() {
         </label>
 
         <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
-          {categories.map((category) => (
+          {categoryButtons.map((category) => (
             <button
               key={category}
               className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${
@@ -128,67 +285,98 @@ export default function MenuPage() {
 
         <section className="mt-4">
           <h2 className="text-lg font-black">精选餐点</h2>
-          {filteredItems.length > 0 ? (
+
+          {isLoading ? (
+            <div className="mt-6 rounded-3xl border border-dashed border-[#d9bda8] bg-white px-5 py-10 text-center font-black text-[#8b7565] shadow-sm">
+              菜单加载中...
+            </div>
+          ) : null}
+
+          {errorMessage ? (
+            <div className="mt-6 rounded-3xl border border-[#f0c2a4] bg-[#fff4e8] px-5 py-6 shadow-sm">
+              <h3 className="text-lg font-black text-[#9a3f12]">读取菜单失败</h3>
+              <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap rounded-2xl bg-[#2a120a] px-4 py-3 text-xs font-bold text-[#ffd8cb]">
+                {errorMessage}
+              </pre>
+            </div>
+          ) : null}
+
+          {!isLoading && !errorMessage && filteredItems.length > 0 ? (
             <div className="mt-3 space-y-3">
               {filteredItems.map((item) => (
-              <article
-                key={item.id}
-                className="flex cursor-pointer gap-3 rounded-2xl border border-[#f1e3d8] bg-white p-3 shadow-sm transition active:scale-[0.99]"
-                onClick={() => openProduct(item)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    openProduct(item);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-              >
-                <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#8b3515,#2a1208)] text-xs font-black text-[#ffd7a6]">
-                  {item.category}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-bold">{item.name}</h3>
-                      <p className="mt-1 line-clamp-2 text-sm text-[#7b6355]">
-                        {item.description}
-                      </p>
-                    </div>
-                    <button
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#5a210b] text-lg font-bold text-white"
-                      type="button"
-                      aria-label={`选择 ${item.name}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openProduct(item);
-                      }}
-                    >
-                      +
-                    </button>
+                <article
+                  key={item.id}
+                  className="flex cursor-pointer gap-3 rounded-2xl border border-[#f1e3d8] bg-white p-3 shadow-sm transition active:scale-[0.99]"
+                  onClick={() => openProduct(item)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      openProduct(item);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#8b3515,#2a1208)] text-xs font-black text-[#ffd7a6]">
+                    {item.category}
                   </div>
-                  <p className="mt-3 font-black text-[#c01818]">${item.price}</p>
-                </div>
-              </article>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-bold">{item.name}</h3>
+                          {item.isRecommended ? (
+                            <span className="rounded-full bg-[#fff0df] px-2 py-0.5 text-xs font-black text-[#c65a1e]">
+                              推荐
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-sm text-[#7b6355]">
+                          {item.description}
+                        </p>
+                      </div>
+                      <button
+                        aria-label={`选择 ${item.name}`}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#5a210b] text-lg font-bold text-white"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openProduct(item);
+                        }}
+                        type="button"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <p className="mt-3 font-black text-[#c01818]">${item.price}</p>
+                  </div>
+                </article>
               ))}
             </div>
-          ) : (
+          ) : null}
+
+          {!isLoading && !errorMessage && filteredItems.length === 0 ? (
             <div className="mt-6 rounded-3xl border border-dashed border-[#d9bda8] bg-white px-5 py-10 text-center shadow-sm">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#fbf0e6] text-sm font-black text-[#8b3a14]">
                 空
               </div>
-              <h3 className="mt-5 text-lg font-black">没有找到符合的餐点</h3>
+              <h3 className="mt-5 text-lg font-black">
+                {menuItems.length === 0 ? "目前没有商品" : "没有找到符合的餐点"}
+              </h3>
               <p className="mt-2 text-sm text-[#7b6355]">
-                可以换个关键字，或回到全部分类重新看看。
+                {menuItems.length === 0
+                  ? "后台新增并上架商品后，会实时显示在这里。"
+                  : "可以换个关键字，或回到全部分类重新看看。"}
               </p>
-              <button
-                className="mt-5 rounded-full bg-[#5a210b] px-5 py-3 text-sm font-black text-white shadow-md shadow-[#5a210b]/20"
-                onClick={clearFilters}
-                type="button"
-              >
-                清除筛选
-              </button>
+              {menuItems.length > 0 ? (
+                <button
+                  className="mt-5 rounded-full bg-[#5a210b] px-5 py-3 text-sm font-black text-white shadow-md shadow-[#5a210b]/20"
+                  onClick={clearFilters}
+                  type="button"
+                >
+                  清除筛选
+                </button>
+              ) : null}
             </div>
-          )}
+          ) : null}
         </section>
       </section>
 
@@ -271,13 +459,15 @@ function ProductDetailSheet({
           <div>
             <p className="text-sm font-semibold text-[#9b6b45]">{item.category}</p>
             <h2 className="mt-1 text-2xl font-black">{item.name}</h2>
-            <p className="mt-2 text-sm leading-6 text-[#7b6355]">{item.description}</p>
+            <p className="mt-2 text-sm leading-6 text-[#7b6355]">
+              {item.description}
+            </p>
           </div>
           <button
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#ead8c8] bg-white text-lg font-black text-[#5a210b]"
-            type="button"
             aria-label="关闭商品详情"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#ead8c8] bg-white text-lg font-black text-[#5a210b]"
             onClick={onClose}
+            type="button"
           >
             X
           </button>
@@ -339,17 +529,17 @@ function ProductDetailSheet({
           <div className="flex items-center gap-3">
             <button
               className="h-9 w-9 rounded-full border border-[#ead8c8] font-black disabled:text-[#c9b9aa]"
-              type="button"
               disabled={quantity <= 1}
               onClick={() => onQuantityChange(Math.max(1, quantity - 1))}
+              type="button"
             >
               -
             </button>
             <span className="w-6 text-center text-lg font-black">{quantity}</span>
             <button
               className="h-9 w-9 rounded-full border border-[#ead8c8] font-black"
-              type="button"
               onClick={() => onQuantityChange(quantity + 1)}
+              type="button"
             >
               +
             </button>
@@ -358,8 +548,8 @@ function ProductDetailSheet({
 
         <button
           className="mt-5 flex h-14 w-full items-center justify-center rounded-2xl bg-[#5a210b] text-lg font-black text-white shadow-lg shadow-[#5a210b]/25"
-          type="button"
           onClick={onAddToCart}
+          type="button"
         >
           {`加入购物车・$${total}`}
         </button>
@@ -399,8 +589,8 @@ function OptionButton({
           ? "bg-[#5a210b] text-white shadow-md shadow-[#5a210b]/20"
           : "border border-[#ead8c8] bg-white text-[#5b473c]"
       }`}
-      type="button"
       onClick={onClick}
+      type="button"
     >
       {label}
     </button>
