@@ -6,11 +6,38 @@ import { useState } from "react";
 import { BottomNav } from "../_components/bottom-nav";
 import { getCartItemKey, useCart, type CartItem } from "../_contexts/cart-context";
 import { useOrder } from "../_contexts/order-context";
+import { createOrder } from "@/lib/orders";
 
 function getItemSubtotal(item: CartItem) {
   const addonsTotal = item.addons.reduce((sum, addon) => sum + addon.price, 0);
 
   return (item.price + addonsTotal) * item.quantity;
+}
+
+function generateOrderNumber() {
+  const now = new Date();
+  const datePart = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("");
+  const randomPart = String(Math.floor(Math.random() * 10_000)).padStart(4, "0");
+
+  return `ORD-${datePart}-${randomPart}`;
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    const code = "code" in error ? String(error.code) : "unknown";
+
+    return [
+      `name: ${error.name}`,
+      `code: ${code}`,
+      `message: ${error.message}`,
+    ].join("\n");
+  }
+
+  return JSON.stringify(error, null, 2);
 }
 
 export default function CartPage() {
@@ -20,33 +47,73 @@ export default function CartPage() {
   const [diningType, setDiningType] = useState("内用");
   const [tableNumber, setTableNumber] = useState("A5 桌");
   const [orderNote, setOrderNote] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const serviceFee = Math.round(subtotal * 0.1);
   const total = Math.round(subtotal + serviceFee);
 
-  const handleSubmitOrder = () => {
-    const orderNumber = `#${String(Date.now()).slice(-4)}`;
+  const handleSubmitOrder = async () => {
+    if (isSubmitting) {
+      return;
+    }
 
-    setLastOrder({
-      orderNumber,
-      diningType,
-      tableNumber: tableNumber.trim() || "未填写",
-      note: orderNote.trim(),
-      items,
-      subtotal,
-      serviceFee,
-      total,
-      status: "制作中",
-      estimatedTime: "15-20分钟",
-      createdAt: new Date().toLocaleString("zh-TW", {
-        hour12: false,
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    });
-    clearCart();
-    router.push("/order-success");
+    const orderNumber = generateOrderNumber();
+    const normalizedTableNumber = tableNumber.trim() || "未填写";
+    const normalizedNote = orderNote.trim();
+    const orderItems = items.map((item) => ({
+      productId: String(item.id),
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+      selectedDoneness: item.selectedDoneness,
+      selectedSauce: item.selectedSauce,
+      addons: item.addons,
+      note: item.note,
+      itemSubtotal: getItemSubtotal(item),
+    }));
+
+    setIsSubmitting(true);
+    setSubmitError("");
+
+    try {
+      const firestoreDocumentId = await createOrder({
+        orderNumber,
+        diningType,
+        tableNumber: normalizedTableNumber,
+        customerNote: normalizedNote,
+        items: orderItems,
+        subtotal,
+        serviceFee,
+        total,
+      });
+
+      setLastOrder({
+        firestoreDocumentId,
+        orderNumber,
+        diningType,
+        tableNumber: normalizedTableNumber,
+        note: normalizedNote,
+        items,
+        subtotal,
+        serviceFee,
+        total,
+        status: "制作中",
+        estimatedTime: "15-20分钟",
+        createdAt: new Date().toLocaleString("zh-TW", {
+          hour12: false,
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      });
+      clearCart();
+      router.push("/order-success");
+    } catch (error) {
+      setSubmitError(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (items.length === 0) {
@@ -81,6 +148,7 @@ export default function CartPage() {
           <h1 className="text-center text-2xl font-black">购物车</h1>
           <button
             className="w-16 text-right text-sm font-bold text-[#8b3a14]"
+            disabled={isSubmitting}
             onClick={clearCart}
             type="button"
           >
@@ -194,6 +262,7 @@ export default function CartPage() {
                     ? "border-[#5a210b] bg-white text-[#5a210b]"
                     : "border-[#ead8c8] bg-white text-[#7b6355]"
                 }`}
+                disabled={isSubmitting}
                 onClick={() => setDiningType("内用")}
                 type="button"
               >
@@ -205,6 +274,7 @@ export default function CartPage() {
                     ? "border-[#5a210b] bg-white text-[#5a210b]"
                     : "border-[#ead8c8] bg-white text-[#7b6355]"
                 }`}
+                disabled={isSubmitting}
                 onClick={() => setDiningType("外带自取")}
                 type="button"
               >
@@ -217,6 +287,7 @@ export default function CartPage() {
             <span className="font-bold">桌号</span>
             <input
               className="mt-2 h-12 w-full rounded-2xl border border-[#ead8c8] bg-white px-4 outline-none"
+              disabled={isSubmitting}
               onChange={(event) => setTableNumber(event.target.value)}
               value={tableNumber}
             />
@@ -226,6 +297,7 @@ export default function CartPage() {
             <span className="font-bold">备注</span>
             <textarea
               className="mt-2 h-20 w-full resize-none rounded-2xl border border-[#ead8c8] bg-white px-4 py-3 outline-none"
+              disabled={isSubmitting}
               onChange={(event) => setOrderNote(event.target.value)}
               placeholder="例如：不要洋葱、少酱等"
               value={orderNote}
@@ -233,12 +305,25 @@ export default function CartPage() {
           </label>
         </section>
 
+        {submitError ? (
+          <section className="mt-5 rounded-2xl border border-[#f0c2a4] bg-[#fff4e8] p-4">
+            <h2 className="font-black text-[#9a3f12]">订单送出失败</h2>
+            <p className="mt-2 text-sm font-bold text-[#6f5646]">
+              购物车已保留，请检查网络或 Firestore Rules 后再试一次。
+            </p>
+            <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-2xl bg-[#2a120a] px-4 py-3 text-xs font-bold text-[#ffd8cb]">
+              {submitError}
+            </pre>
+          </section>
+        ) : null}
+
         <button
-          className="mt-6 flex h-14 w-full items-center justify-center rounded-2xl bg-[#5a210b] text-lg font-black text-white shadow-lg shadow-[#5a210b]/25"
+          className="mt-6 flex h-14 w-full items-center justify-center rounded-2xl bg-[#5a210b] text-lg font-black text-white shadow-lg shadow-[#5a210b]/25 disabled:cursor-not-allowed disabled:bg-[#bca89b] disabled:shadow-none"
+          disabled={isSubmitting}
           onClick={handleSubmitOrder}
           type="button"
         >
-          {`送出订单・$${total}`}
+          {isSubmitting ? "送出订单中..." : `送出订单・$${total}`}
         </button>
       </section>
       <BottomNav active="cart" />
