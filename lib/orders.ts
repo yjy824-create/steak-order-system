@@ -18,6 +18,15 @@ export type FirestoreOrderItem = {
   itemSubtotal: number;
 };
 
+export type FirestoreOrderStatus =
+  | "pending"
+  | "cooking"
+  | "ready"
+  | "completed"
+  | "cancelled";
+
+export type FirestorePaymentStatus = "unpaid" | "paid";
+
 export type CreateOrderInput = {
   orderNumber: string;
   diningType: string;

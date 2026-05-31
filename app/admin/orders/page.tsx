@@ -1,19 +1,52 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import {
+  collection,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  type Timestamp,
+} from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
 import { AdminShell } from "../_components/admin-shell";
+import { db } from "@/lib/firebase";
+import type {
+  FirestoreOrderItem,
+  FirestoreOrderStatus,
+  FirestorePaymentStatus,
+} from "@/lib/orders";
 
-type OrderStatus = "pending" | "cooking" | "ready" | "completed" | "cancelled";
+type OrderStatus = FirestoreOrderStatus;
+type PaymentStatus = FirestorePaymentStatus;
 type StatusFilter = "all" | OrderStatus;
 
 type AdminOrder = {
-  number: string;
-  diningType: "内用" | "外带";
-  tableLabel: string;
-  time: string;
+  id: string;
+  orderNumber: string;
+  diningType: string;
+  tableNumber: string;
+  customerNote: string;
+  items: FirestoreOrderItem[];
   summary: string;
-  amount: number;
+  total: number;
   status: OrderStatus;
+  paymentStatus: PaymentStatus;
+  createdAt: string;
+};
+
+type FirestoreOrderData = {
+  orderNumber?: string;
+  diningType?: string;
+  tableNumber?: string;
+  customerNote?: string;
+  items?: FirestoreOrderItem[];
+  total?: number;
+  status?: string;
+  paymentStatus?: string;
+  createdAt?: Timestamp | Date | null;
 };
 
 const statusLabels: Record<OrderStatus, string> = {
@@ -22,6 +55,11 @@ const statusLabels: Record<OrderStatus, string> = {
   ready: "待取餐",
   completed: "已完成",
   cancelled: "已取消",
+};
+
+const paymentStatusLabels: Record<PaymentStatus, string> = {
+  unpaid: "未付款",
+  paid: "已付款",
 };
 
 const statusStyles: Record<OrderStatus, string> = {
@@ -41,79 +79,114 @@ const filterOptions: Array<{ label: string; value: StatusFilter }> = [
   { label: "已取消", value: "cancelled" },
 ];
 
-const initialOrders: AdminOrder[] = [
-  {
-    number: "#1023",
-    diningType: "内用",
-    tableLabel: "A5 桌",
-    time: "12:30",
-    summary: "菲力牛排 x1、玉米浓汤 x1、可乐 x1",
-    amount: 572,
-    status: "cooking",
-  },
-  {
-    number: "#1022",
-    diningType: "外带",
-    tableLabel: "外带自取",
-    time: "12:28",
-    summary: "经典沙朗牛排 x1",
-    amount: 450,
-    status: "pending",
-  },
-  {
-    number: "#1021",
-    diningType: "内用",
-    tableLabel: "B3 桌",
-    time: "12:25",
-    summary: "丁骨牛排 x1、奶油玉米浓汤 x2",
-    amount: 840,
-    status: "cooking",
-  },
-  {
-    number: "#1020",
-    diningType: "外带",
-    tableLabel: "外带自取",
-    time: "12:18",
-    summary: "番茄肉酱意面 x2",
-    amount: 320,
-    status: "ready",
-  },
-  {
-    number: "#1019",
-    diningType: "内用",
-    tableLabel: "A2 桌",
-    time: "12:15",
-    summary: "菲力牛排 x1、可乐 x2",
-    amount: 650,
-    status: "completed",
-  },
-  {
-    number: "#1018",
-    diningType: "外带",
-    tableLabel: "外带自取",
-    time: "12:10",
-    summary: "丁骨牛排 x1、可乐 x1",
-    amount: 650,
-    status: "cancelled",
-  },
-  {
-    number: "#1017",
-    diningType: "内用",
-    tableLabel: "C2 桌",
-    time: "11:58",
-    summary: "经典沙朗牛排 x1、洋葱汤 x1",
-    amount: 560,
-    status: "pending",
-  },
+const orderStatuses: OrderStatus[] = [
+  "pending",
+  "cooking",
+  "ready",
+  "completed",
+  "cancelled",
 ];
+
+const paymentStatuses: PaymentStatus[] = ["unpaid", "paid"];
 
 function formatCurrency(amount: number) {
   return `$${amount.toLocaleString("en-US")}`;
 }
 
+function formatCreatedAt(value: FirestoreOrderData["createdAt"]) {
+  if (!value) {
+    return "时间未知";
+  }
+
+  const date = value instanceof Date ? value : value.toDate();
+
+  return date.toLocaleString("zh-TW", {
+    hour12: false,
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getOrderStatus(value: string | undefined): OrderStatus {
+  return value && orderStatuses.includes(value as OrderStatus)
+    ? (value as OrderStatus)
+    : "pending";
+}
+
+function getPaymentStatus(value: string | undefined): PaymentStatus {
+  return value && paymentStatuses.includes(value as PaymentStatus)
+    ? (value as PaymentStatus)
+    : "unpaid";
+}
+
+function getOrderSummary(items: FirestoreOrderItem[] | undefined) {
+  if (!items || items.length === 0) {
+    return "无餐点资料";
+  }
+
+  return items.map((item) => `${item.name} x${item.quantity}`).join("、");
+}
+
+function mapOrderDocument(id: string, data: FirestoreOrderData): AdminOrder {
+  const items = Array.isArray(data.items) ? data.items : [];
+
+  return {
+    id,
+    orderNumber: data.orderNumber || id,
+    diningType: data.diningType || "未填写",
+    tableNumber: data.tableNumber || "未填写",
+    customerNote: data.customerNote || "",
+    items,
+    summary: getOrderSummary(items),
+    total: typeof data.total === "number" ? data.total : 0,
+    status: getOrderStatus(data.status),
+    paymentStatus: getPaymentStatus(data.paymentStatus),
+    createdAt: formatCreatedAt(data.createdAt),
+  };
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return JSON.stringify(error);
+}
+
 export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState(initialOrders);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [activeFilter, setActiveFilter] = useState<StatusFilter>("all");
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [updatingOrderId, setUpdatingOrderId] = useState("");
+
+  useEffect(() => {
+    const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+
+    const unsubscribe = onSnapshot(
+      ordersQuery,
+      (snapshot) => {
+        setOrders(
+          snapshot.docs.map((orderDoc) =>
+            mapOrderDocument(
+              orderDoc.id,
+              orderDoc.data() as FirestoreOrderData,
+            ),
+          ),
+        );
+        setErrorMessage("");
+        setIsLoading(false);
+      },
+      (error) => {
+        setErrorMessage(error.message);
+        setIsLoading(false);
+      },
+    );
+
+    return unsubscribe;
+  }, []);
 
   const stats = useMemo(
     () => ({
@@ -134,12 +207,20 @@ export default function AdminOrdersPage() {
     [activeFilter, orders],
   );
 
-  const updateOrderStatus = (orderNumber: string, status: OrderStatus) => {
-    setOrders((currentOrders) =>
-      currentOrders.map((order) =>
-        order.number === orderNumber ? { ...order, status } : order,
-      ),
-    );
+  const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
+    setUpdatingOrderId(orderId);
+    setErrorMessage("");
+
+    try {
+      await updateDoc(doc(db, "orders", orderId), {
+        status,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setUpdatingOrderId("");
+    }
   };
 
   return (
@@ -177,9 +258,9 @@ export default function AdminOrdersPage() {
           />
           <select
             className="h-11 rounded-xl border border-[#ead8c8] px-4 text-sm outline-none"
-            defaultValue="2024/05/24"
+            defaultValue="全部日期"
           >
-            <option>2024/05/24</option>
+            <option>全部日期</option>
           </select>
           <button
             className="h-11 rounded-xl border border-[#ead8c8] px-5 text-sm font-black"
@@ -189,72 +270,109 @@ export default function AdminOrdersPage() {
           </button>
         </div>
 
-        <div className="mt-5 overflow-hidden rounded-2xl border border-[#eadfd6]">
-          <table className="w-full border-collapse text-left text-sm">
-            <thead className="bg-[#f7f2ed] text-[#5b473c]">
-              <tr>
-                {[
-                  "订单编号",
-                  "桌号 / 外带",
-                  "下单时间",
-                  "餐点摘要",
-                  "总金额",
-                  "状态",
-                  "操作",
-                ].map((head) => (
-                  <th key={head} className="px-4 py-4 font-black">
-                    {head}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#eadfd6] bg-white">
-              {filteredOrders.map((order) => (
-                <tr key={order.number}>
-                  <td className="px-4 py-4 align-top font-black">
-                    {order.number}
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <div className="space-y-2">
-                      <span
-                        className={`inline-flex rounded-full px-3 py-1 font-bold ${
-                          order.diningType === "内用"
-                            ? "bg-[#fff0df] text-[#8b3a14]"
-                            : "bg-[#e8f4ea] text-[#258544]"
-                        }`}
-                      >
-                        {order.diningType}
-                      </span>
-                      <p className="font-bold text-[#5b473c]">
-                        {order.tableLabel}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 align-top font-bold">{order.time}</td>
-                  <td className="max-w-sm px-4 py-4 align-top text-[#5b473c]">
-                    {order.summary}
-                  </td>
-                  <td className="px-4 py-4 align-top font-black">
-                    {formatCurrency(order.amount)}
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <span
-                      className={`rounded-full px-3 py-1 font-bold ${statusStyles[order.status]}`}
-                    >
-                      {statusLabels[order.status]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <OrderActions
-                      order={order}
-                      onUpdateStatus={updateOrderStatus}
-                    />
-                  </td>
+        {isLoading ? (
+          <div className="mt-5 rounded-2xl border border-dashed border-[#ead8c8] bg-[#fffaf5] px-5 py-12 text-center font-black text-[#8b7565]">
+            订单加载中...
+          </div>
+        ) : null}
+
+        {errorMessage ? (
+          <div className="mt-5 rounded-2xl border border-[#f0c2a4] bg-[#fff4e8] p-5">
+            <h2 className="font-black text-[#9a3f12]">读取订单失败</h2>
+            <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-2xl bg-[#2a120a] px-4 py-3 text-xs font-bold text-[#ffd8cb]">
+              {errorMessage}
+            </pre>
+          </div>
+        ) : null}
+
+        {!isLoading && !errorMessage && filteredOrders.length === 0 ? (
+          <div className="mt-5 rounded-2xl border border-dashed border-[#ead8c8] bg-[#fffaf5] px-5 py-12 text-center">
+            <p className="text-lg font-black text-[#5a210b]">目前没有订单</p>
+            <p className="mt-2 text-sm font-bold text-[#8b7565]">
+              新订单送出后会实时显示在这里。
+            </p>
+          </div>
+        ) : null}
+
+        {!isLoading && !errorMessage && filteredOrders.length > 0 ? (
+          <div className="mt-5 overflow-hidden rounded-2xl border border-[#eadfd6]">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-[#f7f2ed] text-[#5b473c]">
+                <tr>
+                  {[
+                    "订单编号",
+                    "桌号 / 外带",
+                    "下单时间",
+                    "餐点摘要",
+                    "备注",
+                    "总金额",
+                    "付款",
+                    "状态",
+                    "操作",
+                  ].map((head) => (
+                    <th key={head} className="px-4 py-4 font-black">
+                      {head}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-[#eadfd6] bg-white">
+                {filteredOrders.map((order) => (
+                  <tr key={order.id}>
+                    <td className="px-4 py-4 align-top font-black">
+                      {order.orderNumber}
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <div className="space-y-2">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 font-bold ${
+                            order.diningType === "内用"
+                              ? "bg-[#fff0df] text-[#8b3a14]"
+                              : "bg-[#e8f4ea] text-[#258544]"
+                          }`}
+                        >
+                          {order.diningType}
+                        </span>
+                        <p className="font-bold text-[#5b473c]">
+                          {order.tableNumber}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 align-top font-bold">
+                      {order.createdAt}
+                    </td>
+                    <td className="max-w-sm px-4 py-4 align-top text-[#5b473c]">
+                      {order.summary}
+                    </td>
+                    <td className="max-w-xs px-4 py-4 align-top text-[#5b473c]">
+                      {order.customerNote || "无"}
+                    </td>
+                    <td className="px-4 py-4 align-top font-black">
+                      {formatCurrency(order.total)}
+                    </td>
+                    <td className="px-4 py-4 align-top font-bold text-[#5b473c]">
+                      {paymentStatusLabels[order.paymentStatus]}
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <span
+                        className={`rounded-full px-3 py-1 font-bold ${statusStyles[order.status]}`}
+                      >
+                        {statusLabels[order.status]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <OrderActions
+                        isUpdating={updatingOrderId === order.id}
+                        order={order}
+                        onUpdateStatus={updateOrderStatus}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </section>
     </AdminShell>
   );
@@ -278,12 +396,18 @@ function StatCard({
 }
 
 function OrderActions({
+  isUpdating,
   onUpdateStatus,
   order,
 }: {
-  onUpdateStatus: (orderNumber: string, status: OrderStatus) => void;
+  isUpdating: boolean;
+  onUpdateStatus: (orderId: string, status: OrderStatus) => void;
   order: AdminOrder;
 }) {
+  if (isUpdating) {
+    return <span className="font-black text-[#8b7565]">更新中...</span>;
+  }
+
   if (order.status === "completed") {
     return <span className="font-black text-[#258544]">已完成</span>;
   }
@@ -296,7 +420,7 @@ function OrderActions({
     return (
       <button
         className="rounded-lg bg-[#5a210b] px-4 py-2 text-xs font-black text-white"
-        onClick={() => onUpdateStatus(order.number, "completed")}
+        onClick={() => onUpdateStatus(order.id, "completed")}
         type="button"
       >
         完成订单
@@ -309,14 +433,14 @@ function OrderActions({
       <div className="flex flex-wrap gap-2">
         <button
           className="rounded-lg bg-[#2f5d9f] px-4 py-2 text-xs font-black text-white"
-          onClick={() => onUpdateStatus(order.number, "ready")}
+          onClick={() => onUpdateStatus(order.id, "ready")}
           type="button"
         >
           标记待取餐
         </button>
         <button
           className="rounded-lg border border-[#ffd0c9] px-4 py-2 text-xs font-black text-[#d43b2f]"
-          onClick={() => onUpdateStatus(order.number, "cancelled")}
+          onClick={() => onUpdateStatus(order.id, "cancelled")}
           type="button"
         >
           取消订单
@@ -329,14 +453,14 @@ function OrderActions({
     <div className="flex flex-wrap gap-2">
       <button
         className="rounded-lg bg-[#df7119] px-4 py-2 text-xs font-black text-white"
-        onClick={() => onUpdateStatus(order.number, "cooking")}
+        onClick={() => onUpdateStatus(order.id, "cooking")}
         type="button"
       >
         开始制作
       </button>
       <button
         className="rounded-lg border border-[#ffd0c9] px-4 py-2 text-xs font-black text-[#d43b2f]"
-        onClick={() => onUpdateStatus(order.number, "cancelled")}
+        onClick={() => onUpdateStatus(order.id, "cancelled")}
         type="button"
       >
         取消订单
