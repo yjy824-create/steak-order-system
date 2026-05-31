@@ -2,7 +2,8 @@
 
 import { doc, onSnapshot, type Timestamp } from "firebase/firestore";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { BottomNav } from "../_components/bottom-nav";
 import { useOrder } from "../_contexts/order-context";
 import { db } from "@/lib/firebase";
@@ -162,8 +163,20 @@ function EmptyOrderState({
 }
 
 export default function OrderStatusPage() {
+  return (
+    <Suspense fallback={<OrderStatusLoading />}>
+      <OrderStatusContent />
+    </Suspense>
+  );
+}
+
+function OrderStatusContent() {
   const { lastOrder } = useOrder();
-  const documentId = lastOrder?.firestoreId || lastOrder?.firestoreDocumentId;
+  const searchParams = useSearchParams();
+  const urlDocumentId = searchParams.get("id")?.trim() || "";
+  const fallbackDocumentId =
+    lastOrder?.firestoreId || lastOrder?.firestoreDocumentId || "";
+  const documentId = urlDocumentId || fallbackDocumentId;
   const [order, setOrder] = useState<CustomerOrder | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [loadedDocumentId, setLoadedDocumentId] = useState("");
@@ -367,6 +380,19 @@ export default function OrderStatusPage() {
             </div>
           </div>
         </section>
+      </section>
+      <BottomNav active="order" />
+    </main>
+  );
+}
+
+function OrderStatusLoading() {
+  return (
+    <main className="min-h-screen bg-[#f8f0e8] pb-28 text-[#2a1208]">
+      <section className="mx-auto min-h-screen w-full max-w-md bg-[#fffaf5] px-5 pt-16 text-center shadow-2xl shadow-[#3b1a0b]/10">
+        <div className="rounded-3xl border border-dashed border-[#ead8c8] bg-white px-5 py-12 text-xl font-black text-[#8b7565]">
+          订单状态加载中...
+        </div>
       </section>
       <BottomNav active="order" />
     </main>

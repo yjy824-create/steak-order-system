@@ -109,7 +109,7 @@ export default function CartPage() {
         }),
       });
       clearCart();
-      router.push("/order-success");
+      router.push(`/order-success?id=${encodeURIComponent(firestoreDocumentId)}`);
     } catch (error) {
       setSubmitError(getErrorMessage(error));
     } finally {

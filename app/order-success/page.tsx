@@ -1,13 +1,30 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { BottomNav } from "../_components/bottom-nav";
 import { useOrder } from "../_contexts/order-context";
 
 export default function OrderSuccessPage() {
-  const { lastOrder } = useOrder();
+  return (
+    <Suspense fallback={<OrderSuccessLoading />}>
+      <OrderSuccessContent />
+    </Suspense>
+  );
+}
 
-  if (!lastOrder) {
+function OrderSuccessContent() {
+  const { lastOrder } = useOrder();
+  const searchParams = useSearchParams();
+  const urlTrackingId = searchParams.get("id")?.trim() || "";
+  const trackingId =
+    urlTrackingId || lastOrder?.firestoreId || lastOrder?.firestoreDocumentId || "";
+  const orderStatusHref = trackingId
+    ? `/order-status?id=${encodeURIComponent(trackingId)}`
+    : "/order-status";
+
+  if (!lastOrder && !trackingId) {
     return (
       <main className="min-h-screen bg-[#f8f0e8] pb-28 text-[#2a1208]">
         <section className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-[#fffaf5] px-5 pt-16 text-center shadow-2xl shadow-[#3b1a0b]/10">
@@ -38,29 +55,33 @@ export default function OrderSuccessPage() {
         <p className="mt-3 text-[#7b6355]">感谢您的点餐，祝您用餐愉快！</p>
 
         <section className="mt-8 rounded-3xl border border-[#f1e3d8] bg-white p-6 shadow-sm">
-          <p className="text-sm font-bold text-[#7b6355]">订单编号</p>
-          <p className="mt-2 text-4xl font-black text-[#f07a18]">
-            {lastOrder.orderNumber}
-          </p>
-          <div className="my-5 h-px bg-[#f1e3d8]" />
-          <p className="text-sm font-bold text-[#7b6355]">用餐方式</p>
-          <p className="mt-2 text-lg font-black">
-            {lastOrder.diningType}・{lastOrder.tableNumber}
-          </p>
-          <div className="my-5 h-px bg-[#f1e3d8]" />
-          <p className="text-sm font-bold text-[#7b6355]">预计等待时间</p>
-          <p className="mt-2 text-2xl font-black">{lastOrder.estimatedTime}</p>
-          <div className="my-5 h-px bg-[#f1e3d8]" />
-          <p className="text-sm font-bold text-[#7b6355]">总金额</p>
-          <p className="mt-2 text-2xl font-black text-[#c01818]">
-            ${lastOrder.total}
-          </p>
-          {lastOrder.firestoreId || lastOrder.firestoreDocumentId ? (
+          {lastOrder ? (
             <>
+              <p className="text-sm font-bold text-[#7b6355]">订单编号</p>
+              <p className="mt-2 text-4xl font-black text-[#f07a18]">
+                {lastOrder.orderNumber}
+              </p>
               <div className="my-5 h-px bg-[#f1e3d8]" />
+              <p className="text-sm font-bold text-[#7b6355]">用餐方式</p>
+              <p className="mt-2 text-lg font-black">
+                {lastOrder.diningType}・{lastOrder.tableNumber}
+              </p>
+              <div className="my-5 h-px bg-[#f1e3d8]" />
+              <p className="text-sm font-bold text-[#7b6355]">预计等待时间</p>
+              <p className="mt-2 text-2xl font-black">{lastOrder.estimatedTime}</p>
+              <div className="my-5 h-px bg-[#f1e3d8]" />
+              <p className="text-sm font-bold text-[#7b6355]">总金额</p>
+              <p className="mt-2 text-2xl font-black text-[#c01818]">
+                ${lastOrder.total}
+              </p>
+            </>
+          ) : null}
+          {trackingId ? (
+            <>
+              {lastOrder ? <div className="my-5 h-px bg-[#f1e3d8]" /> : null}
               <p className="text-sm font-bold text-[#7b6355]">订单追踪 ID</p>
               <p className="mt-2 break-all text-sm font-black text-[#5a210b]">
-                {lastOrder.firestoreId || lastOrder.firestoreDocumentId}
+                {trackingId}
               </p>
             </>
           ) : null}
@@ -68,7 +89,7 @@ export default function OrderSuccessPage() {
 
         <div className="mt-auto space-y-3 pb-6 pt-8">
           <Link
-            href="/order-status"
+            href={orderStatusHref}
             className="flex h-14 items-center justify-center rounded-2xl bg-[#5a210b] text-lg font-black text-white shadow-lg shadow-[#5a210b]/25"
           >
             查看订单进度
@@ -79,6 +100,19 @@ export default function OrderSuccessPage() {
           >
             继续点餐
           </Link>
+        </div>
+      </section>
+      <BottomNav active="order" />
+    </main>
+  );
+}
+
+function OrderSuccessLoading() {
+  return (
+    <main className="min-h-screen bg-[#f8f0e8] pb-28 text-[#2a1208]">
+      <section className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-[#fffaf5] px-5 pt-16 text-center shadow-2xl shadow-[#3b1a0b]/10">
+        <div className="rounded-3xl border border-dashed border-[#ead8c8] bg-white px-5 py-12 text-xl font-black text-[#8b7565]">
+          订单资料载入中...
         </div>
       </section>
       <BottomNav active="order" />
