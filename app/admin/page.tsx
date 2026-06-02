@@ -1,109 +1,383 @@
+"use client";
+
+import {
+  collection,
+  onSnapshot,
+  orderBy,
+  query,
+  type Timestamp,
+} from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
 import { AdminShell } from "./_components/admin-shell";
+import { db } from "@/lib/firebase";
+import type { FirestoreOrderStatus } from "@/lib/orders";
 
-const stats = [
-  { label: "今日营业额", value: "$32,850", tone: "text-[#8b3a14]", note: "较昨日 ▲ 12.5%" },
-  { label: "今日订单数", value: "128", tone: "text-[#1b5e96]", note: "较昨日 ▲ 8.3%" },
-  { label: "制作中订单", value: "16", tone: "text-[#df7119]", note: "查看厨房" },
-  { label: "已完成订单", value: "98", tone: "text-[#258544]", note: "较昨日 ▲ 15.2%" },
+type DashboardOrder = {
+  id: string;
+  orderNumber: string;
+  diningType: string;
+  tableNumber: string;
+  status: FirestoreOrderStatus;
+  total: number;
+  createdAt: Date | null;
+};
+
+type FirestoreDashboardOrderData = {
+  orderNumber?: string;
+  diningType?: string;
+  tableNumber?: string;
+  status?: string;
+  total?: number;
+  createdAt?: Timestamp | Date | null;
+};
+
+const statusLabels: Record<FirestoreOrderStatus, string> = {
+  pending: "待制作",
+  cooking: "制作中",
+  ready: "待取餐",
+  completed: "已完成",
+  cancelled: "已取消",
+};
+
+const statusTones: Record<FirestoreOrderStatus, string> = {
+  pending: "bg-[#fff0df] text-[#9a4d13]",
+  cooking: "bg-[#fff7d8] text-[#9b6b00]",
+  ready: "bg-[#e8f4ff] text-[#1b5e96]",
+  completed: "bg-[#e8f4ea] text-[#258544]",
+  cancelled: "bg-[#f8e8e6] text-[#c43324]",
+};
+
+const validStatuses: FirestoreOrderStatus[] = [
+  "pending",
+  "cooking",
+  "ready",
+  "completed",
+  "cancelled",
 ];
 
-const latestOrders = [
-  { number: "#1023", type: "内用", table: "A5 桌", time: "12:30", amount: "$572", status: "制作中" },
-  { number: "#1022", type: "外带", table: "外带自取", time: "12:28", amount: "$450", status: "待确认" },
-  { number: "#1021", type: "内用", table: "B3 桌", time: "12:25", amount: "$840", status: "制作中" },
-];
+function getOrderStatus(value: string | undefined): FirestoreOrderStatus {
+  return value && validStatuses.includes(value as FirestoreOrderStatus)
+    ? (value as FirestoreOrderStatus)
+    : "pending";
+}
 
-const topProducts = [
-  ["经典沙朗牛排", "78 份", "$24,960"],
-  ["菲力牛排", "56 份", "$25,200"],
-  ["黑胡椒铁板面", "45 份", "$8,100"],
-  ["奶油玉米浓汤", "42 份", "$3,360"],
-  ["可乐", "38 份", "$1,140"],
-];
+function getCreatedAt(value: FirestoreDashboardOrderData["createdAt"]) {
+  if (!value) {
+    return null;
+  }
+
+  return value instanceof Date ? value : value.toDate();
+}
+
+function isToday(date: Date | null) {
+  if (!date) {
+    return false;
+  }
+
+  const now = new Date();
+
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
+}
+
+function formatCurrency(amount: number) {
+  return `$${Math.round(amount).toLocaleString("en-US")}`;
+}
+
+function formatDateTime(date: Date | null) {
+  if (!date) {
+    return "时间未知";
+  }
+
+  return date.toLocaleString("zh-TW", {
+    hour12: false,
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function mapOrderDocument(
+  id: string,
+  data: FirestoreDashboardOrderData,
+): DashboardOrder {
+  return {
+    id,
+    orderNumber: data.orderNumber || "未编号",
+    diningType: data.diningType || "未填写",
+    tableNumber: data.tableNumber || "未填写",
+    status: getOrderStatus(data.status),
+    total: typeof data.total === "number" ? data.total : 0,
+    createdAt: getCreatedAt(data.createdAt),
+  };
+}
+
+function getStatusCount(orders: DashboardOrder[], status: FirestoreOrderStatus) {
+  return orders.filter((order) => order.status === status).length;
+}
 
 export default function AdminDashboardPage() {
+  const [orders, setOrders] = useState<DashboardOrder[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+
+    const unsubscribe = onSnapshot(
+      ordersQuery,
+      (snapshot) => {
+        setOrders(
+          snapshot.docs.map((orderDoc) =>
+            mapOrderDocument(
+              orderDoc.id,
+              orderDoc.data() as FirestoreDashboardOrderData,
+            ),
+          ),
+        );
+        setErrorMessage("");
+        setIsLoading(false);
+      },
+      (error) => {
+        setErrorMessage(error.message);
+        setIsLoading(false);
+      },
+    );
+
+    return unsubscribe;
+  }, []);
+
+  const dashboard = useMemo(() => {
+    const todayOrders = orders.filter((order) => isToday(order.createdAt));
+    const todayRevenue = todayOrders
+      .filter((order) => order.status === "completed")
+      .reduce((sum, order) => sum + order.total, 0);
+
+    return {
+      cancelled: getStatusCount(todayOrders, "cancelled"),
+      completed: getStatusCount(todayOrders, "completed"),
+      cooking: getStatusCount(todayOrders, "cooking"),
+      pending: getStatusCount(todayOrders, "pending"),
+      ready: getStatusCount(todayOrders, "ready"),
+      recentOrders: orders.slice(0, 10),
+      todayOrders,
+      todayRevenue,
+    };
+  }, [orders]);
+
+  const statusCards = [
+    {
+      label: "今日订单数",
+      note: "今日 createdAt 订单",
+      tone: "text-[#1b5e96]",
+      value: dashboard.todayOrders.length,
+    },
+    {
+      label: "今日营业额",
+      note: "仅统计已完成订单",
+      tone: "text-[#8b3a14]",
+      value: formatCurrency(dashboard.todayRevenue),
+    },
+    {
+      label: "待制作",
+      note: "pending",
+      tone: "text-[#9a4d13]",
+      value: dashboard.pending,
+    },
+    {
+      label: "制作中",
+      note: "cooking",
+      tone: "text-[#df7119]",
+      value: dashboard.cooking,
+    },
+    {
+      label: "待取餐",
+      note: "ready",
+      tone: "text-[#1b5e96]",
+      value: dashboard.ready,
+    },
+    {
+      label: "已完成",
+      note: "completed",
+      tone: "text-[#258544]",
+      value: dashboard.completed,
+    },
+    {
+      label: "已取消",
+      note: "cancelled",
+      tone: "text-[#c43324]",
+      value: dashboard.cancelled,
+    },
+  ];
+
+  const maxStatusCount = Math.max(
+    dashboard.pending,
+    dashboard.cooking,
+    dashboard.ready,
+    dashboard.completed,
+    dashboard.cancelled,
+    1,
+  );
+
   return (
     <AdminShell active="dashboard" eyebrow="/admin" title="后台首页">
-      <section className="grid gap-5 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <article key={stat.label} className="rounded-2xl border border-[#eadfd6] bg-white p-6 shadow-sm">
-            <p className="text-sm font-bold text-[#8b7565]">{stat.label}</p>
-            <p className={`mt-4 text-3xl font-black ${stat.tone}`}>{stat.value}</p>
-            <p className="mt-3 text-sm font-semibold text-[#2d8a4f]">{stat.note}</p>
-          </article>
-        ))}
-      </section>
+      {isLoading ? (
+        <section className="rounded-2xl border border-dashed border-[#ead8c8] bg-white px-5 py-12 text-center text-xl font-black text-[#8b7565]">
+          Dashboard 载入中...
+        </section>
+      ) : null}
 
-      <section className="mt-6 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-        <article className="rounded-2xl border border-[#eadfd6] bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-black">营业额趋势</h2>
-            <button className="rounded-full border border-[#ead8c8] px-4 py-2 text-sm font-bold" type="button">
-              全部
-            </button>
-          </div>
-          <div className="mt-8 h-64 rounded-2xl bg-[linear-gradient(180deg,#fff8ef,#fff)] p-5">
-            <div className="flex h-full items-end gap-3">
-              {[8, 14, 22, 34, 46, 65, 78, 70, 58, 46, 62, 38].map((height, index) => (
-                <div key={index} className="flex flex-1 items-end">
-                  <div
-                    className="w-full rounded-t-xl bg-[linear-gradient(180deg,#cf6f22,#f4d1ad)]"
-                    style={{ height: `${height}%` }}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        </article>
+      {errorMessage ? (
+        <section className="rounded-2xl border border-[#f0c2a4] bg-[#fff4e8] p-5">
+          <h2 className="text-xl font-black text-[#9a3f12]">读取 Dashboard 失败</h2>
+          <pre className="mt-4 max-h-56 overflow-auto whitespace-pre-wrap rounded-2xl bg-[#2a120a] px-4 py-3 text-sm font-bold text-[#ffd8cb]">
+            {errorMessage}
+          </pre>
+        </section>
+      ) : null}
 
-        <article className="rounded-2xl border border-[#eadfd6] bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-black">订单来源</h2>
-          <div className="mt-8 flex items-center justify-center">
-            <div className="flex h-48 w-48 items-center justify-center rounded-full border-[28px] border-[#7a451f] bg-[#f7f2ed] text-center">
-              <div>
-                <p className="text-sm text-[#8b7565]">总订单</p>
-                <p className="text-3xl font-black">128</p>
-              </div>
-            </div>
-          </div>
-          <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-            <p className="rounded-xl bg-[#fbf4ed] p-3 font-bold">内用 72%</p>
-            <p className="rounded-xl bg-[#fbf4ed] p-3 font-bold">外带 28%</p>
-          </div>
-        </article>
-      </section>
+      {!isLoading && !errorMessage && orders.length === 0 ? (
+        <section className="rounded-2xl border border-dashed border-[#ead8c8] bg-white px-5 py-12 text-center">
+          <h2 className="text-2xl font-black text-[#5a210b]">目前没有订单</h2>
+          <p className="mt-3 text-sm font-bold text-[#8b7565]">
+            顾客送出订单后，Dashboard 会实时显示统计资料。
+          </p>
+        </section>
+      ) : null}
 
-      <section className="mt-6 grid gap-5 xl:grid-cols-[1fr_1fr]">
-        <article className="rounded-2xl border border-[#eadfd6] bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-black">最新订单</h2>
-          <div className="mt-4 space-y-3">
-            {latestOrders.map((order) => (
-              <div key={order.number} className="grid grid-cols-6 items-center gap-3 rounded-xl bg-[#fbf8f5] px-4 py-3 text-sm">
-                <span className="font-black">{order.number}</span>
-                <span className="rounded-full bg-[#fff0df] px-3 py-1 text-center font-bold text-[#8b3a14]">{order.type}</span>
-                <span>{order.table}</span>
-                <span>{order.time}</span>
-                <span className="font-black">{order.amount}</span>
-                <span className="font-bold text-[#df7119]">{order.status}</span>
-              </div>
+      {!isLoading && !errorMessage && orders.length > 0 ? (
+        <>
+          <section className="grid gap-5 xl:grid-cols-4">
+            {statusCards.map((stat) => (
+              <article
+                key={stat.label}
+                className="rounded-2xl border border-[#eadfd6] bg-white p-6 shadow-sm"
+              >
+                <p className="text-sm font-bold text-[#8b7565]">{stat.label}</p>
+                <p className={`mt-4 text-3xl font-black ${stat.tone}`}>
+                  {stat.value}
+                </p>
+                <p className="mt-3 text-sm font-semibold text-[#8b7565]">
+                  {stat.note}
+                </p>
+              </article>
             ))}
-          </div>
-        </article>
+          </section>
 
-        <article className="rounded-2xl border border-[#eadfd6] bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-black">热门商品 TOP 5</h2>
-          <div className="mt-4 space-y-3">
-            {topProducts.map(([name, count, amount], index) => (
-              <div key={name} className="grid grid-cols-[2rem_1fr_auto_auto] items-center gap-3 text-sm">
-                <span className="font-black">{index + 1}</span>
-                <span>{name}</span>
-                <span className="text-[#8b7565]">{count}</span>
-                <span className="font-black">{amount}</span>
+          <section className="mt-6 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+            <article className="rounded-2xl border border-[#eadfd6] bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-black">今日订单状态</h2>
+                <span className="rounded-full bg-[#fbf4ed] px-4 py-2 text-sm font-bold text-[#8b7565]">
+                  实时同步
+                </span>
               </div>
-            ))}
-          </div>
-        </article>
-      </section>
+              <div className="mt-6 space-y-4">
+                {validStatuses.map((status) => {
+                  const count = getStatusCount(dashboard.todayOrders, status);
+                  const width = `${Math.max((count / maxStatusCount) * 100, count > 0 ? 8 : 0)}%`;
+
+                  return (
+                    <div key={status}>
+                      <div className="flex items-center justify-between text-sm font-black">
+                        <span>{statusLabels[status]}</span>
+                        <span>{count}</span>
+                      </div>
+                      <div className="mt-2 h-4 overflow-hidden rounded-full bg-[#f3ebe3]">
+                        <div
+                          className="h-full rounded-full bg-[linear-gradient(90deg,#8b3a14,#f29a1f)]"
+                          style={{ width }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </article>
+
+            <article className="rounded-2xl border border-[#eadfd6] bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-black">今日营业额</h2>
+              <div className="mt-6 rounded-3xl bg-[linear-gradient(145deg,#5a210b,#9a4d13)] p-6 text-white">
+                <p className="text-sm font-bold text-[#ffd7a6]">
+                  completed 订单 total 加总
+                </p>
+                <p className="mt-4 text-5xl font-black">
+                  {formatCurrency(dashboard.todayRevenue)}
+                </p>
+                <p className="mt-4 text-sm font-semibold text-[#f9ddc4]">
+                  今日完成订单：{dashboard.completed} 笔
+                </p>
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                <p className="rounded-xl bg-[#fbf4ed] p-3 font-bold">
+                  今日订单 {dashboard.todayOrders.length} 笔
+                </p>
+                <p className="rounded-xl bg-[#fbf4ed] p-3 font-bold">
+                  待处理 {dashboard.pending + dashboard.cooking + dashboard.ready} 笔
+                </p>
+              </div>
+            </article>
+          </section>
+
+          <section className="mt-6 rounded-2xl border border-[#eadfd6] bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-black">最近订单</h2>
+              <span className="text-sm font-bold text-[#8b7565]">最近 10 笔</span>
+            </div>
+            {dashboard.recentOrders.length > 0 ? (
+              <div className="mt-4 overflow-hidden rounded-2xl border border-[#eadfd6]">
+                <table className="w-full border-collapse text-left text-sm">
+                  <thead className="bg-[#f7f2ed] text-[#5b473c]">
+                    <tr>
+                      {["订单编号", "桌号 / 外带", "订单状态", "金额", "建立时间"].map(
+                        (head) => (
+                          <th key={head} className="px-4 py-4 font-black">
+                            {head}
+                          </th>
+                        ),
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#eadfd6]">
+                    {dashboard.recentOrders.map((order) => (
+                      <tr key={order.id} className="bg-white">
+                        <td className="px-4 py-4 font-black">{order.orderNumber}</td>
+                        <td className="px-4 py-4">
+                          <p className="font-bold">{order.diningType}</p>
+                          <p className="mt-1 text-xs text-[#8b7565]">
+                            {order.tableNumber}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-black ${statusTones[order.status]}`}
+                          >
+                            {statusLabels[order.status]}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 font-black">
+                          {formatCurrency(order.total)}
+                        </td>
+                        <td className="px-4 py-4 text-[#7b6355]">
+                          {formatDateTime(order.createdAt)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-dashed border-[#ead8c8] bg-[#fffaf5] px-5 py-10 text-center font-black text-[#8b7565]">
+                目前没有最近订单
+              </div>
+            )}
+          </section>
+        </>
+      ) : null}
     </AdminShell>
   );
 }
