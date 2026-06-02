@@ -12,10 +12,9 @@ import {
   updateDoc,
   type Timestamp,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useEffect, useMemo, useState } from "react";
 import { AdminShell } from "../_components/admin-shell";
-import { db, storage } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 
 type ProductFilter = "all" | "available" | "unavailable" | "recommended";
 
@@ -102,6 +101,13 @@ const filterOptions: Array<{ label: string; value: ProductFilter }> = [
 const acceptedImageTypes = ["image/jpeg", "image/png", "image/webp"];
 const maxImageSize = 5 * 1024 * 1024;
 
+type CloudinaryUploadResponse = {
+  secure_url?: string;
+  error?: {
+    message?: string;
+  };
+};
+
 function mapProductDocument(id: string, data: FirestoreProductData): Product {
   return {
     id,
@@ -170,14 +176,6 @@ function getErrorMessage(error: unknown) {
 
 function sortProducts(products: Product[]) {
   return [...products].sort((a, b) => a.sortOrder - b.sortOrder);
-}
-
-function sanitizeFileName(fileName: string) {
-  return fileName
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-zA-Z0-9._-]/g, "")
-    .toLowerCase();
 }
 
 export default function AdminProductsPage() {
@@ -308,21 +306,25 @@ export default function AdminProductsPage() {
   };
 
   const uploadProductImage = async (file: File) => {
-    const productId = editingProduct?.id || draftProductId;
-
-    if (!productId) {
-      setImageUploadError("上传失败：缺少商品 ID。");
-      return;
-    }
-
     if (!acceptedImageTypes.includes(file.type)) {
-      setImageUploadError("上传失败：只支持 jpg、jpeg、png、webp。");
+      setImageUploadError("仅支持 jpg、jpeg、png、webp");
       setImageUploadMessage("");
       return;
     }
 
     if (file.size > maxImageSize) {
-      setImageUploadError("上传失败：图片不能超过 5MB。");
+      setImageUploadError("图片不能超过 5MB");
+      setImageUploadMessage("");
+      return;
+    }
+
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+    if (!cloudName || !uploadPreset) {
+      setImageUploadError(
+        "Cloudinary 环境变量未配置：NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME / NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET",
+      );
       setImageUploadMessage("");
       return;
     }
@@ -332,19 +334,29 @@ export default function AdminProductsPage() {
     setImageUploadMessage("");
 
     try {
-      const safeFileName = sanitizeFileName(file.name) || "product-image";
-      const imageRef = ref(
-        storage,
-        `products/${productId}/${Date.now()}-${safeFileName}`,
+      const uploadData = new FormData();
+      uploadData.append("file", file);
+      uploadData.append("upload_preset", uploadPreset);
+
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        {
+          body: uploadData,
+          method: "POST",
+        },
       );
+      const result = (await response.json()) as CloudinaryUploadResponse;
 
-      await uploadBytes(imageRef, file, { contentType: file.type });
-      const downloadURL = await getDownloadURL(imageRef);
+      if (!response.ok || !result.secure_url) {
+        throw new Error(
+          result.error?.message || `Cloudinary 上传失败（${response.status}）`,
+        );
+      }
 
-      setForm((currentForm) => ({ ...currentForm, imageUrl: downloadURL }));
+      setForm((currentForm) => ({ ...currentForm, imageUrl: result.secure_url ?? "" }));
       setImageUploadMessage("上传成功");
     } catch (error) {
-      setImageUploadError(`上传失败：${getErrorMessage(error)}`);
+      setImageUploadError(getErrorMessage(error));
     } finally {
       setIsUploadingImage(false);
     }
