@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { BottomNav } from "../_components/bottom-nav";
 import { useOrder } from "../_contexts/order-context";
 
@@ -17,12 +17,44 @@ export default function OrderSuccessPage() {
 function OrderSuccessContent() {
   const { lastOrder } = useOrder();
   const searchParams = useSearchParams();
+  const [copyMessage, setCopyMessage] = useState("");
+  const [manualCopyLink, setManualCopyLink] = useState("");
   const urlTrackingId = searchParams.get("id")?.trim() || "";
   const trackingId =
     urlTrackingId || lastOrder?.firestoreId || lastOrder?.firestoreDocumentId || "";
   const orderStatusHref = trackingId
     ? `/order-status?id=${encodeURIComponent(trackingId)}`
     : "/order-status";
+  const trackingUrl = useMemo(() => {
+    if (!trackingId || typeof window === "undefined") {
+      return "";
+    }
+
+    return `${window.location.origin}/order-status?id=${encodeURIComponent(
+      trackingId,
+    )}`;
+  }, [trackingId]);
+
+  const copyTrackingLink = async () => {
+    if (!trackingUrl) {
+      return;
+    }
+
+    if (!navigator.clipboard) {
+      setCopyMessage("");
+      setManualCopyLink(trackingUrl);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(trackingUrl);
+      setCopyMessage("已复制订单追踪链接");
+      setManualCopyLink("");
+    } catch {
+      setCopyMessage("");
+      setManualCopyLink(trackingUrl);
+    }
+  };
 
   if (!lastOrder && !trackingId) {
     return (
@@ -88,6 +120,30 @@ function OrderSuccessContent() {
         </section>
 
         <div className="mt-auto space-y-3 pb-6 pt-8">
+          {trackingId ? (
+            <div className="space-y-3">
+              <button
+                className="flex h-14 w-full items-center justify-center rounded-2xl border border-[#ead8c8] bg-[#fff7ef] text-lg font-black text-[#5a210b]"
+                onClick={copyTrackingLink}
+                type="button"
+              >
+                复制订单追踪链接
+              </button>
+              {copyMessage ? (
+                <p className="text-sm font-black text-[#258544]">{copyMessage}</p>
+              ) : null}
+              {manualCopyLink ? (
+                <div className="rounded-2xl border border-[#ead8c8] bg-white p-3 text-left">
+                  <p className="text-xs font-bold text-[#7b6355]">
+                    请手动复制以下追踪链接
+                  </p>
+                  <p className="mt-2 break-all text-sm font-black text-[#5a210b]">
+                    {manualCopyLink}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <Link
             href={orderStatusHref}
             className="flex h-14 items-center justify-center rounded-2xl bg-[#5a210b] text-lg font-black text-white shadow-lg shadow-[#5a210b]/25"
