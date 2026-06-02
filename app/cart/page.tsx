@@ -73,8 +73,9 @@ function CartContent() {
   const serviceFee = Math.round(subtotal * serviceFeeRate);
   const total = Math.round(subtotal + serviceFee);
   const serviceFeePercent = Math.round(serviceFeeRate * 100);
-  const diningType = urlTableNumber ? "内用" : manualDiningType;
-  const tableNumber = urlTableNumber || manualTableNumber;
+  const diningType = manualDiningType;
+  const displayedTableNumber = urlTableNumber || manualTableNumber;
+  const orderTableNumber = diningType === "内用" ? displayedTableNumber : "";
 
   const handleSubmitOrder = async () => {
     if (isSubmitting) {
@@ -82,7 +83,7 @@ function CartContent() {
     }
 
     const orderNumber = generateOrderNumber();
-    const normalizedTableNumber = tableNumber.trim() || "未填写";
+    const normalizedTableNumber = orderTableNumber.trim();
     const normalizedNote = orderNote.trim();
     const orderItems = items.map((item) => ({
       productId: String(item.id),
@@ -289,6 +290,12 @@ function CartContent() {
         </section>
 
         <section className="mt-5 space-y-4">
+          {urlTableNumber ? (
+            <div className="rounded-2xl border border-[#ead8c8] bg-[#fbf4ed] px-4 py-3 text-sm font-black text-[#5a210b]">
+              📍 掃碼桌號：{urlTableNumber}
+            </div>
+          ) : null}
+
           <div>
             <h2 className="font-bold">用餐方式</h2>
             <div className="mt-3 grid grid-cols-2 gap-3">
@@ -299,7 +306,7 @@ function CartContent() {
                     ? "border-[#5a210b] bg-white text-[#5a210b]"
                     : "border-[#ead8c8] bg-white text-[#7b6355]"
                 }`}
-                disabled={isSubmitting || Boolean(urlTableNumber)}
+                disabled={isSubmitting}
                 onClick={() => setManualDiningType("内用")}
                 type="button"
               >
@@ -312,31 +319,31 @@ function CartContent() {
                     ? "border-[#5a210b] bg-white text-[#5a210b]"
                     : "border-[#ead8c8] bg-white text-[#7b6355]"
                 }`}
-                disabled={isSubmitting || Boolean(urlTableNumber)}
+                disabled={isSubmitting}
                 onClick={() => setManualDiningType("外带")}
                 type="button"
               >
                 外带
               </button>
             </div>
-            {urlTableNumber ? (
-              <p className="mt-2 text-xs font-bold text-[#8b7565]">
-                桌号点餐模式已自动设为内用。
-              </p>
-            ) : null}
           </div>
 
           <label className="block">
             <span className="font-bold">桌号</span>
             <input
               className="mt-2 h-12 w-full rounded-2xl border border-[#ead8c8] bg-white px-4 outline-none"
-              disabled={isSubmitting || Boolean(urlTableNumber)}
+              disabled={isSubmitting || Boolean(urlTableNumber) || diningType === "外带"}
               onChange={(event) => setManualTableNumber(event.target.value)}
-              value={tableNumber}
+              value={diningType === "内用" ? displayedTableNumber : ""}
             />
-            {urlTableNumber ? (
+            {urlTableNumber && diningType === "内用" ? (
               <span className="mt-2 block text-xs font-bold text-[#8b7565]">
                 已由桌面二维码自动带入，顾客无需再次输入。
+              </span>
+            ) : null}
+            {diningType === "外带" ? (
+              <span className="mt-2 block text-xs font-bold text-[#8b7565]">
+                外帶訂單不會帶入桌號。
               </span>
             ) : null}
           </label>
