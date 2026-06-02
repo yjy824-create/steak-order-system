@@ -18,6 +18,7 @@ export type Order = {
   note: string;
   items: CartItem[];
   subtotal: number;
+  serviceFeeRate: number;
   serviceFee: number;
   total: number;
   status: "制作中";

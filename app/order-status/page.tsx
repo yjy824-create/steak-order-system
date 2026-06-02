@@ -23,6 +23,7 @@ type CustomerOrder = {
   createdAt: string;
   items: FirestoreOrderItem[];
   subtotal: number;
+  serviceFeeRate: number;
   serviceFee: number;
   total: number;
 };
@@ -37,6 +38,7 @@ type FirestoreCustomerOrderData = {
   createdAt?: Timestamp | Date | null;
   items?: FirestoreOrderItem[];
   subtotal?: number;
+  serviceFeeRate?: number;
   serviceFee?: number;
   total?: number;
 };
@@ -100,6 +102,15 @@ function getPaymentStatus(value: string | undefined): FirestorePaymentStatus {
 }
 
 function mapCustomerOrder(data: FirestoreCustomerOrderData): CustomerOrder {
+  const subtotal = typeof data.subtotal === "number" ? data.subtotal : 0;
+  const serviceFee = typeof data.serviceFee === "number" ? data.serviceFee : 0;
+  const serviceFeeRate =
+    typeof data.serviceFeeRate === "number"
+      ? data.serviceFeeRate
+      : subtotal > 0
+        ? serviceFee / subtotal
+        : 0.1;
+
   return {
     orderNumber: data.orderNumber || "未编号",
     diningType: data.diningType || "未填写",
@@ -109,8 +120,9 @@ function mapCustomerOrder(data: FirestoreCustomerOrderData): CustomerOrder {
     paymentStatus: getPaymentStatus(data.paymentStatus),
     createdAt: formatCreatedAt(data.createdAt),
     items: Array.isArray(data.items) ? data.items : [],
-    subtotal: typeof data.subtotal === "number" ? data.subtotal : 0,
-    serviceFee: typeof data.serviceFee === "number" ? data.serviceFee : 0,
+    subtotal,
+    serviceFeeRate,
+    serviceFee,
     total: typeof data.total === "number" ? data.total : 0,
   };
 }
@@ -371,7 +383,7 @@ function OrderStatusContent() {
               <span>${order.subtotal}</span>
             </div>
             <div className="flex justify-between">
-              <span>服务费</span>
+              <span>服务费（{Math.round(order.serviceFeeRate * 100)}%）</span>
               <span>${order.serviceFee}</span>
             </div>
             <div className="flex justify-between text-lg font-black">

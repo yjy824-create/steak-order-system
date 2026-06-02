@@ -6,6 +6,7 @@ import { useState } from "react";
 import { BottomNav } from "../_components/bottom-nav";
 import { getCartItemKey, useCart, type CartItem } from "../_contexts/cart-context";
 import { useOrder } from "../_contexts/order-context";
+import { useStoreSettings } from "../_hooks/use-store-settings";
 import { createOrder } from "@/lib/orders";
 
 function getItemSubtotal(item: CartItem) {
@@ -44,13 +45,20 @@ export default function CartPage() {
   const router = useRouter();
   const { clearCart, items, removeItem, subtotal, updateQuantity } = useCart();
   const { setLastOrder } = useOrder();
+  const {
+    errorMessage: settingsErrorMessage,
+    isLoading: isSettingsLoading,
+    settings,
+  } = useStoreSettings();
   const [diningType, setDiningType] = useState("内用");
   const [tableNumber, setTableNumber] = useState("A5 桌");
   const [orderNote, setOrderNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const serviceFee = Math.round(subtotal * 0.1);
+  const serviceFeeRate = settings.serviceFeeRate;
+  const serviceFee = Math.round(subtotal * serviceFeeRate);
   const total = Math.round(subtotal + serviceFee);
+  const serviceFeePercent = Math.round(serviceFeeRate * 100);
 
   const handleSubmitOrder = async () => {
     if (isSubmitting) {
@@ -84,6 +92,7 @@ export default function CartPage() {
         items: orderItems,
         subtotal,
         serviceFee,
+        serviceFeeRate,
         total,
       });
 
@@ -96,6 +105,7 @@ export default function CartPage() {
         note: normalizedNote,
         items,
         subtotal,
+        serviceFeeRate,
         serviceFee,
         total,
         status: "制作中",
@@ -156,6 +166,18 @@ export default function CartPage() {
             清空
           </button>
         </div>
+
+        {isSettingsLoading ? (
+          <section className="mt-5 rounded-2xl border border-dashed border-[#ead8c8] bg-white px-4 py-3 text-sm font-black text-[#8b7565]">
+            店铺服务费读取中...
+          </section>
+        ) : null}
+
+        {settingsErrorMessage ? (
+          <section className="mt-5 rounded-2xl border border-[#f0c2a4] bg-[#fff4e8] px-4 py-3 text-sm font-bold text-[#9a3f12]">
+            服务费设定读取失败，已使用预设 10%。
+          </section>
+        ) : null}
 
         <section className="mt-6">
           <h2 className="font-bold">餐点明细</h2>
@@ -244,7 +266,7 @@ export default function CartPage() {
             <span>${subtotal}</span>
           </div>
           <div className="mt-3 flex justify-between text-sm">
-            <span>服务费（10%）</span>
+            <span>服务费（{serviceFeePercent}%）</span>
             <span>${serviceFee}</span>
           </div>
           <div className="mt-4 flex justify-between border-t border-[#f1e3d8] pt-4 text-lg font-black">

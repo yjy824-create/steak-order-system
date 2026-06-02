@@ -1,10 +1,16 @@
+"use client";
+
 import Link from "next/link";
 import { BottomNav } from "./_components/bottom-nav";
 import { menuItems } from "./_data/menu";
+import { useStoreSettings } from "./_hooks/use-store-settings";
 
 const recommendations = menuItems.slice(0, 3);
 
 export default function Home() {
+  const { errorMessage, isLoading, settings } = useStoreSettings();
+  const announcement = settings.announcement.trim();
+
   return (
     <main className="min-h-screen bg-[#f8f0e8] pb-28 text-[#2a1208]">
       <section className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white shadow-2xl shadow-[#3b1a0b]/10">
@@ -28,6 +34,29 @@ export default function Home() {
         </div>
 
         <section className="-mt-7 rounded-t-[2rem] bg-white px-5 pb-7 pt-8">
+          {isLoading ? (
+            <div className="mb-5 rounded-2xl border border-dashed border-[#ead8c8] bg-[#fffaf5] px-4 py-3 text-sm font-black text-[#8b7565]">
+              店铺设定读取中...
+            </div>
+          ) : null}
+
+          {errorMessage ? (
+            <div className="mb-5 rounded-2xl border border-[#f0c2a4] bg-[#fff4e8] px-4 py-3 text-sm font-bold text-[#9a3f12]">
+              店铺设定读取失败，已使用预设营业资料。
+            </div>
+          ) : null}
+
+          {announcement ? (
+            <div className="mb-5 rounded-2xl border border-[#f2d6ad] bg-[#fff7e8] px-4 py-4 shadow-sm">
+              <p className="text-sm font-black text-[#8b3a14]">
+                📢 店铺公告
+              </p>
+              <p className="mt-2 text-sm font-bold leading-6 text-[#5a210b]">
+                {announcement}
+              </p>
+            </div>
+          ) : null}
+
           <h2 className="text-center text-lg font-bold">请选择用餐方式</h2>
           <div className="mt-5 grid grid-cols-2 gap-3">
             {[

@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { BottomNav } from "../_components/bottom-nav";
 import { useCart } from "../_contexts/cart-context";
+import { useStoreSettings } from "../_hooks/use-store-settings";
 import { db } from "@/lib/firebase";
 
 type MenuCategory = {
@@ -107,6 +108,11 @@ function getErrorMessage(error: unknown) {
 
 export default function MenuPage() {
   const { addItem, subtotal, totalQuantity } = useCart();
+  const {
+    errorMessage: settingsErrorMessage,
+    isLoading: isSettingsLoading,
+    settings,
+  } = useStoreSettings();
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [activeCategory, setActiveCategory] = useState("全部");
@@ -204,7 +210,7 @@ export default function MenuPage() {
   };
 
   const handleAddToCart = () => {
-    if (!selectedItem) {
+    if (!selectedItem || !settings.isOpen) {
       return;
     }
 
@@ -254,6 +260,29 @@ export default function MenuPage() {
             搜
           </div>
         </header>
+
+        {isSettingsLoading ? (
+          <div className="mt-5 rounded-2xl border border-dashed border-[#ead8c8] bg-white px-4 py-3 text-sm font-black text-[#8b7565]">
+            营业状态读取中...
+          </div>
+        ) : null}
+
+        {settingsErrorMessage ? (
+          <div className="mt-5 rounded-2xl border border-[#f0c2a4] bg-[#fff4e8] px-4 py-3 text-sm font-bold text-[#9a3f12]">
+            营业状态读取失败，已使用预设营业中状态。
+          </div>
+        ) : null}
+
+        {!settings.isOpen ? (
+          <div className="mt-5 rounded-3xl border border-[#f0c2a4] bg-[#fff4e8] px-5 py-5 shadow-sm">
+            <p className="text-lg font-black text-[#9a3f12]">
+              本店目前暂停营业
+            </p>
+            <p className="mt-2 text-sm font-bold text-[#7b6355]">
+              商品仍可浏览，但暂时无法加入购物车。
+            </p>
+          </div>
+        ) : null}
 
         <label className="mt-5 flex h-12 items-center rounded-2xl border border-[#ead8c8] bg-white px-4 text-sm text-[#8f8075] focus-within:border-[#b86a32]">
           <span className="mr-2 text-[#5a210b]">搜</span>
@@ -334,14 +363,15 @@ export default function MenuPage() {
                       </div>
                       <button
                         aria-label={`选择 ${item.name}`}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#5a210b] text-lg font-bold text-white"
+                        className="flex h-8 min-w-8 shrink-0 items-center justify-center rounded-full bg-[#5a210b] px-2 text-sm font-bold text-white disabled:bg-[#c9b5a5]"
+                        disabled={!settings.isOpen}
                         onClick={(event) => {
                           event.stopPropagation();
                           openProduct(item);
                         }}
                         type="button"
                       >
-                        +
+                        {settings.isOpen ? "+" : "暂停营业"}
                       </button>
                     </div>
                     <p className="mt-3 font-black text-[#c01818]">${item.price}</p>
@@ -394,6 +424,7 @@ export default function MenuPage() {
           note={note}
           quantity={quantity}
           sauce={sauce}
+          storeIsOpen={settings.isOpen}
           onAddToCart={handleAddToCart}
           onClose={closeProduct}
           onNoteChange={setNote}
@@ -416,6 +447,7 @@ function ProductDetailSheet({
   note,
   quantity,
   sauce,
+  storeIsOpen,
   onAddToCart,
   onClose,
   onDonenessChange,
@@ -430,6 +462,7 @@ function ProductDetailSheet({
   note: string;
   quantity: number;
   sauce: string;
+  storeIsOpen: boolean;
   onAddToCart: () => void;
   onClose: () => void;
   onDonenessChange: (value: string) => void;
@@ -539,11 +572,12 @@ function ProductDetailSheet({
         </div>
 
         <button
-          className="mt-5 flex h-14 w-full items-center justify-center rounded-2xl bg-[#5a210b] text-lg font-black text-white shadow-lg shadow-[#5a210b]/25"
+          className="mt-5 flex h-14 w-full items-center justify-center rounded-2xl bg-[#5a210b] text-lg font-black text-white shadow-lg shadow-[#5a210b]/25 disabled:cursor-not-allowed disabled:bg-[#c9b5a5] disabled:shadow-none"
+          disabled={!storeIsOpen}
           onClick={onAddToCart}
           type="button"
         >
-          {`加入购物车・$${total}`}
+          {storeIsOpen ? `加入购物车・$${total}` : "暂停营业"}
         </button>
       </section>
     </div>

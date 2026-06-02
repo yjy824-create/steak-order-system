@@ -34,6 +34,7 @@ export type CreateOrderInput = {
   customerNote: string;
   items: FirestoreOrderItem[];
   subtotal: number;
+  serviceFeeRate: number;
   serviceFee: number;
   total: number;
 };
