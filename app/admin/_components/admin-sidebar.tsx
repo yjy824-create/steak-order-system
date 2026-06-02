@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useAdminAuth } from "../_contexts/admin-auth-context";
 
 type AdminNavKey = "dashboard" | "kitchen" | "orders" | "products" | "categories";
 
@@ -11,6 +14,8 @@ const navItems: Array<{ key: AdminNavKey; href: string; label: string; mark: str
 ];
 
 export function AdminSidebar({ active }: { active: AdminNavKey }) {
+  const { logout } = useAdminAuth();
+
   return (
     <aside className="flex min-h-screen w-64 shrink-0 flex-col bg-[linear-gradient(160deg,#2b160d,#130b07)] px-5 py-6 text-[#f8eadc]">
       <div className="rounded-2xl border border-[#7a5238]/40 px-4 py-5 text-center">
@@ -55,7 +60,11 @@ export function AdminSidebar({ active }: { active: AdminNavKey }) {
           </span>
           设置
         </button>
-        <button className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold text-[#e5cbb2] hover:bg-white/10" type="button">
+        <button
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold text-[#e5cbb2] hover:bg-white/10"
+          onClick={logout}
+          type="button"
+        >
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#3b2417] text-xs">
             出
           </span>
