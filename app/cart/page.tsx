@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { BottomNav } from "../_components/bottom-nav";
 import { getCartItemKey, useCart, type CartItem } from "../_contexts/cart-context";
 import { useOrder } from "../_contexts/order-context";
 import { useStoreSettings } from "../_hooks/use-store-settings";
+import { getValidTableNumber } from "../_utils/tables";
 import { createOrder } from "@/lib/orders";
 
 function getItemSubtotal(item: CartItem) {
@@ -42,7 +43,17 @@ function getErrorMessage(error: unknown) {
 }
 
 export default function CartPage() {
+  return (
+    <Suspense fallback={<CartLoading />}>
+      <CartContent />
+    </Suspense>
+  );
+}
+
+function CartContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlTableNumber = getValidTableNumber(searchParams.get("table"));
   const { clearCart, items, removeItem, subtotal, updateQuantity } = useCart();
   const { setLastOrder } = useOrder();
   const {
@@ -51,7 +62,7 @@ export default function CartPage() {
     settings,
   } = useStoreSettings();
   const [diningType, setDiningType] = useState("内用");
-  const [tableNumber, setTableNumber] = useState("A5 桌");
+  const [manualTableNumber, setManualTableNumber] = useState("A5 桌");
   const [orderNote, setOrderNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -59,6 +70,7 @@ export default function CartPage() {
   const serviceFee = Math.round(subtotal * serviceFeeRate);
   const total = Math.round(subtotal + serviceFee);
   const serviceFeePercent = Math.round(serviceFeeRate * 100);
+  const tableNumber = urlTableNumber || manualTableNumber;
 
   const handleSubmitOrder = async () => {
     if (isSubmitting) {
@@ -146,7 +158,7 @@ export default function CartPage() {
             </Link>
           </div>
         </section>
-        <BottomNav active="cart" />
+        <BottomNav active="cart" tableNumber={urlTableNumber} />
       </main>
     );
   }
@@ -310,10 +322,15 @@ export default function CartPage() {
             <span className="font-bold">桌号</span>
             <input
               className="mt-2 h-12 w-full rounded-2xl border border-[#ead8c8] bg-white px-4 outline-none"
-              disabled={isSubmitting}
-              onChange={(event) => setTableNumber(event.target.value)}
+              disabled={isSubmitting || Boolean(urlTableNumber)}
+              onChange={(event) => setManualTableNumber(event.target.value)}
               value={tableNumber}
             />
+            {urlTableNumber ? (
+              <span className="mt-2 block text-xs font-bold text-[#8b7565]">
+                已由桌面二维码自动带入，顾客无需再次输入。
+              </span>
+            ) : null}
           </label>
 
           <label className="block">
@@ -348,6 +365,19 @@ export default function CartPage() {
         >
           {isSubmitting ? "送出订单中..." : `送出订单・$${total}`}
         </button>
+      </section>
+      <BottomNav active="cart" tableNumber={urlTableNumber} />
+    </main>
+  );
+}
+
+function CartLoading() {
+  return (
+    <main className="min-h-screen bg-[#f8f0e8] pb-28 text-[#2a1208]">
+      <section className="mx-auto min-h-screen w-full max-w-md bg-[#fffaf5] px-5 pt-16 text-center shadow-2xl shadow-[#3b1a0b]/10">
+        <div className="rounded-3xl border border-dashed border-[#ead8c8] bg-white px-5 py-12 text-xl font-black text-[#8b7565]">
+          购物车加载中...
+        </div>
       </section>
       <BottomNav active="cart" />
     </main>

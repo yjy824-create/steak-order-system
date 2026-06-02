@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCart } from "../_contexts/cart-context";
+import { withTableParam } from "../_utils/tables";
 
 type NavKey = "home" | "menu" | "cart" | "order";
 
@@ -12,7 +13,13 @@ const navItems: Array<{ key: NavKey; href: string; label: string; mark: string }
   { key: "order", href: "/order-status", label: "订单", mark: "订" },
 ];
 
-export function BottomNav({ active }: { active: NavKey }) {
+export function BottomNav({
+  active,
+  tableNumber = "",
+}: {
+  active: NavKey;
+  tableNumber?: string;
+}) {
   const { totalQuantity } = useCart();
 
   return (
@@ -24,7 +31,7 @@ export function BottomNav({ active }: { active: NavKey }) {
           return (
             <Link
               key={item.key}
-              href={item.href}
+              href={withTableParam(item.href, tableNumber)}
               className={`flex flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-xs font-semibold ${
                 isActive ? "text-[#5a210b]" : "text-[#8f8075]"
               }`}

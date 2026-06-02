@@ -1,14 +1,27 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { BottomNav } from "./_components/bottom-nav";
 import { menuItems } from "./_data/menu";
 import { useStoreSettings } from "./_hooks/use-store-settings";
+import { getValidTableNumber, withTableParam } from "./_utils/tables";
 
 const recommendations = menuItems.slice(0, 3);
 
 export default function Home() {
+  return (
+    <Suspense fallback={<HomeLoading />}>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+function HomeContent() {
   const { errorMessage, isLoading, settings } = useStoreSettings();
+  const searchParams = useSearchParams();
+  const tableNumber = getValidTableNumber(searchParams.get("table"));
   const announcement = settings.announcement.trim();
 
   return (
@@ -57,6 +70,12 @@ export default function Home() {
             </div>
           ) : null}
 
+          {tableNumber ? (
+            <div className="mb-5 rounded-2xl border border-[#ead8c8] bg-[#fbf4ed] px-4 py-3 text-sm font-black text-[#5a210b]">
+              目前桌号：{tableNumber}
+            </div>
+          ) : null}
+
           <h2 className="text-center text-lg font-bold">请选择用餐方式</h2>
           <div className="mt-5 grid grid-cols-2 gap-3">
             {[
@@ -78,7 +97,10 @@ export default function Home() {
 
           <div className="mt-8 flex items-center justify-between">
             <h2 className="text-lg font-bold">今日推荐</h2>
-            <Link href="/menu" className="text-sm font-semibold text-[#8b3a14]">
+            <Link
+              href={withTableParam("/menu", tableNumber)}
+              className="text-sm font-semibold text-[#8b3a14]"
+            >
               查看全部
             </Link>
           </div>
@@ -104,12 +126,25 @@ export default function Home() {
           </div>
 
           <Link
-            href="/menu"
+            href={withTableParam("/menu", tableNumber)}
             className="mt-7 flex h-14 items-center justify-center rounded-2xl bg-[#5a210b] text-base font-bold text-white shadow-lg shadow-[#5a210b]/25"
           >
             开始点餐
           </Link>
         </section>
+      </section>
+      <BottomNav active="home" tableNumber={tableNumber} />
+    </main>
+  );
+}
+
+function HomeLoading() {
+  return (
+    <main className="min-h-screen bg-[#f8f0e8] pb-28 text-[#2a1208]">
+      <section className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white px-5 pt-16 shadow-2xl shadow-[#3b1a0b]/10">
+        <div className="rounded-3xl border border-dashed border-[#ead8c8] bg-[#fffaf5] px-5 py-12 text-center text-xl font-black text-[#8b7565]">
+          首页加载中...
+        </div>
       </section>
       <BottomNav active="home" />
     </main>

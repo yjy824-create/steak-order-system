@@ -8,6 +8,7 @@ type AdminNavKey =
   | "orders"
   | "products"
   | "categories"
+  | "tables"
   | "settings";
 
 export function AdminShell({

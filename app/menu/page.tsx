@@ -7,11 +7,13 @@ import {
   where,
 } from "firebase/firestore";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { BottomNav } from "../_components/bottom-nav";
 import { useCart } from "../_contexts/cart-context";
 import { useStoreSettings } from "../_hooks/use-store-settings";
+import { getValidTableNumber, withTableParam } from "../_utils/tables";
 import { db } from "@/lib/firebase";
 
 type MenuCategory = {
@@ -107,7 +109,17 @@ function getErrorMessage(error: unknown) {
 }
 
 export default function MenuPage() {
+  return (
+    <Suspense fallback={<MenuLoading />}>
+      <MenuContent />
+    </Suspense>
+  );
+}
+
+function MenuContent() {
   const { addItem, subtotal, totalQuantity } = useCart();
+  const searchParams = useSearchParams();
+  const tableNumber = getValidTableNumber(searchParams.get("table"));
   const {
     errorMessage: settingsErrorMessage,
     isLoading: isSettingsLoading,
@@ -284,6 +296,12 @@ export default function MenuPage() {
           </div>
         ) : null}
 
+        {tableNumber ? (
+          <div className="mt-5 rounded-2xl border border-[#ead8c8] bg-[#fbf4ed] px-4 py-3 text-sm font-black text-[#5a210b]">
+            目前桌号：{tableNumber}
+          </div>
+        ) : null}
+
         <label className="mt-5 flex h-12 items-center rounded-2xl border border-[#ead8c8] bg-white px-4 text-sm text-[#8f8075] focus-within:border-[#b86a32]">
           <span className="mr-2 text-[#5a210b]">搜</span>
           <input
@@ -409,7 +427,7 @@ export default function MenuPage() {
       </section>
 
       <Link
-        href="/cart"
+        href={withTableParam("/cart", tableNumber)}
         className="fixed inset-x-5 bottom-24 z-30 mx-auto flex h-14 max-w-md items-center justify-between rounded-2xl bg-[#5a210b] px-5 font-bold text-white shadow-xl shadow-[#5a210b]/25"
       >
         <span>购物车（{totalQuantity}）</span>
@@ -435,6 +453,19 @@ export default function MenuPage() {
         />
       ) : null}
 
+      <BottomNav active="menu" tableNumber={tableNumber} />
+    </main>
+  );
+}
+
+function MenuLoading() {
+  return (
+    <main className="min-h-screen bg-[#f8f0e8] pb-36 text-[#2a1208]">
+      <section className="mx-auto min-h-screen w-full max-w-md bg-[#fffaf5] px-5 pt-8 shadow-2xl shadow-[#3b1a0b]/10">
+        <div className="rounded-3xl border border-dashed border-[#d9bda8] bg-white px-5 py-10 text-center font-black text-[#8b7565] shadow-sm">
+          菜单加载中...
+        </div>
+      </section>
       <BottomNav active="menu" />
     </main>
   );

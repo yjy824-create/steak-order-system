@@ -9,6 +9,7 @@ type AdminNavKey =
   | "orders"
   | "products"
   | "categories"
+  | "tables"
   | "settings";
 
 const navItems: Array<{ key: AdminNavKey; href: string; label: string; mark: string }> = [
@@ -17,6 +18,7 @@ const navItems: Array<{ key: AdminNavKey; href: string; label: string; mark: str
   { key: "orders", href: "/admin/orders", label: "订单管理", mark: "单" },
   { key: "products", href: "/admin/products", label: "商品管理", mark: "品" },
   { key: "categories", href: "/admin/categories", label: "分类管理", mark: "类" },
+  { key: "tables", href: "/admin/tables", label: "桌号链接", mark: "桌" },
 ];
 
 export function AdminSidebar({ active }: { active: AdminNavKey }) {
