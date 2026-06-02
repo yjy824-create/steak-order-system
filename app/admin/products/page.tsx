@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -9,12 +8,14 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   type Timestamp,
 } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useEffect, useMemo, useState } from "react";
 import { AdminShell } from "../_components/admin-shell";
-import { db } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
 
 type ProductFilter = "all" | "available" | "unavailable" | "recommended";
 
@@ -98,6 +99,9 @@ const filterOptions: Array<{ label: string; value: ProductFilter }> = [
   { label: "推荐商品", value: "recommended" },
 ];
 
+const acceptedImageTypes = ["image/jpeg", "image/png", "image/webp"];
+const maxImageSize = 5 * 1024 * 1024;
+
 function mapProductDocument(id: string, data: FirestoreProductData): Product {
   return {
     id,
@@ -168,6 +172,14 @@ function sortProducts(products: Product[]) {
   return [...products].sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
+function sanitizeFileName(fileName: string) {
+  return fileName
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9._-]/g, "")
+    .toLowerCase();
+}
+
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categoryOptions, setCategoryOptions] = useState(fallbackCategories);
@@ -179,6 +191,10 @@ export default function AdminProductsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [draftProductId, setDraftProductId] = useState("");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUploadMessage, setImageUploadMessage] = useState("");
+  const [imageUploadError, setImageUploadError] = useState("");
 
   useEffect(() => {
     const productsQuery = query(
@@ -257,27 +273,81 @@ export default function AdminProductsPage() {
   }, [activeFilter, products]);
 
   const openCreateModal = () => {
+    const productRef = doc(collection(db, "products"));
+
     setEditingProduct(null);
+    setDraftProductId(productRef.id);
     setForm(getDefaultForm(categoryOptions));
     setIsModalOpen(true);
     setErrorMessage("");
+    setImageUploadMessage("");
+    setImageUploadError("");
   };
 
   const openEditModal = (product: Product) => {
     setEditingProduct(product);
+    setDraftProductId(product.id);
     setForm(productToForm(product));
     setIsModalOpen(true);
     setErrorMessage("");
+    setImageUploadMessage("");
+    setImageUploadError("");
   };
 
   const closeModal = () => {
-    if (isProcessing) {
+    if (isProcessing || isUploadingImage) {
       return;
     }
 
     setIsModalOpen(false);
     setEditingProduct(null);
+    setDraftProductId("");
     setForm(getDefaultForm(categoryOptions));
+    setImageUploadMessage("");
+    setImageUploadError("");
+  };
+
+  const uploadProductImage = async (file: File) => {
+    const productId = editingProduct?.id || draftProductId;
+
+    if (!productId) {
+      setImageUploadError("上传失败：缺少商品 ID。");
+      return;
+    }
+
+    if (!acceptedImageTypes.includes(file.type)) {
+      setImageUploadError("上传失败：只支持 jpg、jpeg、png、webp。");
+      setImageUploadMessage("");
+      return;
+    }
+
+    if (file.size > maxImageSize) {
+      setImageUploadError("上传失败：图片不能超过 5MB。");
+      setImageUploadMessage("");
+      return;
+    }
+
+    setIsUploadingImage(true);
+    setImageUploadError("");
+    setImageUploadMessage("");
+
+    try {
+      const safeFileName = sanitizeFileName(file.name) || "product-image";
+      const imageRef = ref(
+        storage,
+        `products/${productId}/${Date.now()}-${safeFileName}`,
+      );
+
+      await uploadBytes(imageRef, file, { contentType: file.type });
+      const downloadURL = await getDownloadURL(imageRef);
+
+      setForm((currentForm) => ({ ...currentForm, imageUrl: downloadURL }));
+      setImageUploadMessage("上传成功");
+    } catch (error) {
+      setImageUploadError(`上传失败：${getErrorMessage(error)}`);
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   const saveProduct = async () => {
@@ -316,7 +386,9 @@ export default function AdminProductsPage() {
           updatedAt: serverTimestamp(),
         });
       } else {
-        await addDoc(collection(db, "products"), {
+        const productId = draftProductId || doc(collection(db, "products")).id;
+
+        await setDoc(doc(db, "products", productId), {
           ...payload,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -325,7 +397,10 @@ export default function AdminProductsPage() {
 
       setIsModalOpen(false);
       setEditingProduct(null);
+      setDraftProductId("");
       setForm(getDefaultForm(categoryOptions));
+      setImageUploadMessage("");
+      setImageUploadError("");
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -514,9 +589,13 @@ export default function AdminProductsPage() {
           categoryOptions={categoryOptions}
           form={form}
           isEditing={Boolean(editingProduct)}
+          isUploadingImage={isUploadingImage}
+          imageUploadError={imageUploadError}
+          imageUploadMessage={imageUploadMessage}
           isProcessing={isProcessing}
           onCancel={closeModal}
           onChange={setForm}
+          onImageUpload={uploadProductImage}
           onSubmit={saveProduct}
         />
       ) : null}
@@ -580,19 +659,30 @@ function ProductModal({
   categoryOptions,
   form,
   isEditing,
+  imageUploadError,
+  imageUploadMessage,
   isProcessing,
+  isUploadingImage,
   onCancel,
   onChange,
+  onImageUpload,
   onSubmit,
 }: {
   categoryOptions: CategoryOption[];
   form: ProductForm;
   isEditing: boolean;
+  imageUploadError: string;
+  imageUploadMessage: string;
   isProcessing: boolean;
+  isUploadingImage: boolean;
   onCancel: () => void;
   onChange: (form: ProductForm) => void;
+  onImageUpload: (file: File) => void;
   onSubmit: () => void;
 }) {
+  const isFormDisabled = isProcessing || isUploadingImage;
+  const hasPreview = form.imageUrl.trim().length > 0;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-6">
       <section className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-3xl bg-white p-6 shadow-2xl">
@@ -607,7 +697,7 @@ function ProductModal({
           </div>
           <button
             className="flex h-10 w-10 items-center justify-center rounded-full border border-[#ead8c8] font-black text-[#5a210b] disabled:cursor-not-allowed disabled:text-[#bca89b]"
-            disabled={isProcessing}
+            disabled={isFormDisabled}
             onClick={onCancel}
             type="button"
           >
@@ -620,7 +710,7 @@ function ProductModal({
             <span className="text-sm font-black">商品名称</span>
             <input
               className="mt-2 h-11 w-full rounded-xl border border-[#ead8c8] px-4 outline-none disabled:bg-[#f7f2ed]"
-              disabled={isProcessing}
+              disabled={isFormDisabled}
               onChange={(event) => onChange({ ...form, name: event.target.value })}
               value={form.name}
             />
@@ -630,7 +720,7 @@ function ProductModal({
             <span className="text-sm font-black">分类</span>
             <select
               className="mt-2 h-11 w-full rounded-xl border border-[#ead8c8] px-4 outline-none disabled:bg-[#f7f2ed]"
-              disabled={isProcessing}
+              disabled={isFormDisabled}
               onChange={(event) => {
                 const selectedCategory =
                   categoryOptions.find(
@@ -657,7 +747,7 @@ function ProductModal({
             <span className="text-sm font-black">价格</span>
             <input
               className="mt-2 h-11 w-full rounded-xl border border-[#ead8c8] px-4 outline-none disabled:bg-[#f7f2ed]"
-              disabled={isProcessing}
+              disabled={isFormDisabled}
               min="0"
               onChange={(event) => onChange({ ...form, price: event.target.value })}
               type="number"
@@ -669,7 +759,7 @@ function ProductModal({
             <span className="text-sm font-black">排序 sortOrder</span>
             <input
               className="mt-2 h-11 w-full rounded-xl border border-[#ead8c8] px-4 outline-none disabled:bg-[#f7f2ed]"
-              disabled={isProcessing}
+              disabled={isFormDisabled}
               onChange={(event) =>
                 onChange({ ...form, sortOrder: event.target.value })
               }
@@ -682,7 +772,7 @@ function ProductModal({
             <span className="text-sm font-black">商品图片 URL</span>
             <input
               className="mt-2 h-11 w-full rounded-xl border border-[#ead8c8] px-4 outline-none disabled:bg-[#f7f2ed]"
-              disabled={isProcessing}
+              disabled={isFormDisabled}
               onChange={(event) =>
                 onChange({ ...form, imageUrl: event.target.value })
               }
@@ -691,10 +781,72 @@ function ProductModal({
             />
           </label>
 
+          <div className="md:col-span-2 rounded-2xl border border-[#ead8c8] bg-[#fffaf5] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black">上传图片</p>
+                <p className="mt-1 text-xs font-bold text-[#8b7565]">
+                  支持 jpg、jpeg、png、webp，最大 5MB。
+                </p>
+              </div>
+              <label
+                className={`inline-flex h-11 cursor-pointer items-center justify-center rounded-xl px-5 text-sm font-black ${
+                  isFormDisabled
+                    ? "bg-[#bca89b] text-white"
+                    : "bg-[#5a210b] text-white shadow-lg shadow-[#5a210b]/20"
+                }`}
+              >
+                {isUploadingImage ? "上传中..." : "选择图片"}
+                <input
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  disabled={isFormDisabled}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+
+                    if (file) {
+                      onImageUpload(file);
+                    }
+
+                    event.target.value = "";
+                  }}
+                  type="file"
+                />
+              </label>
+            </div>
+
+            {imageUploadMessage ? (
+              <p className="mt-3 rounded-xl bg-[#e8f4ea] px-3 py-2 text-sm font-black text-[#258544]">
+                {imageUploadMessage}
+              </p>
+            ) : null}
+
+            {imageUploadError ? (
+              <p className="mt-3 whitespace-pre-wrap rounded-xl border border-[#f0c2a4] bg-[#fff4e8] px-3 py-2 text-sm font-black text-[#9a3f12]">
+                {imageUploadError}
+              </p>
+            ) : null}
+
+            {hasPreview ? (
+              <div className="mt-4 overflow-hidden rounded-2xl border border-[#ead8c8] bg-white">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  alt="商品图片预览"
+                  className="h-56 w-full object-cover"
+                  src={form.imageUrl}
+                />
+              </div>
+            ) : (
+              <div className="mt-4 flex h-32 items-center justify-center rounded-2xl border border-dashed border-[#d9bda8] bg-white text-sm font-black text-[#8b7565]">
+                尚未选择图片
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3 pt-7">
             <ToggleButton
               active={form.isAvailable}
-              disabled={isProcessing}
+              disabled={isFormDisabled}
               label="是否上架"
               onClick={() =>
                 onChange({ ...form, isAvailable: !form.isAvailable })
@@ -702,7 +854,7 @@ function ProductModal({
             />
             <ToggleButton
               active={form.isRecommended}
-              disabled={isProcessing}
+              disabled={isFormDisabled}
               label="是否推荐"
               onClick={() =>
                 onChange({ ...form, isRecommended: !form.isRecommended })
@@ -714,7 +866,7 @@ function ProductModal({
             <span className="text-sm font-black">描述</span>
             <textarea
               className="mt-2 h-28 w-full resize-none rounded-xl border border-[#ead8c8] px-4 py-3 outline-none disabled:bg-[#f7f2ed]"
-              disabled={isProcessing}
+              disabled={isFormDisabled}
               onChange={(event) =>
                 onChange({ ...form, description: event.target.value })
               }
@@ -726,7 +878,7 @@ function ProductModal({
         <div className="mt-6 flex justify-end gap-3">
           <button
             className="h-11 rounded-xl border border-[#ead8c8] px-6 text-sm font-black disabled:cursor-not-allowed disabled:text-[#bca89b]"
-            disabled={isProcessing}
+            disabled={isFormDisabled}
             onClick={onCancel}
             type="button"
           >
@@ -734,11 +886,17 @@ function ProductModal({
           </button>
           <button
             className="h-11 rounded-xl bg-[#5a210b] px-6 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-[#bca89b]"
-            disabled={isProcessing}
+            disabled={isFormDisabled}
             onClick={onSubmit}
             type="button"
           >
-            {isProcessing ? "处理中..." : isEditing ? "保存修改" : "新增商品"}
+            {isUploadingImage
+              ? "上传中..."
+              : isProcessing
+                ? "处理中..."
+                : isEditing
+                  ? "保存修改"
+                  : "新增商品"}
           </button>
         </div>
       </section>
