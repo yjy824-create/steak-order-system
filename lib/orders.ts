@@ -1,5 +1,6 @@
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import type { ProductOptionType } from "@/lib/product-options";
 
 export type FirestoreOrderAddon = {
   name: string;
@@ -11,8 +12,10 @@ export type FirestoreOrderItem = {
   name: string;
   price: number;
   quantity: number;
+  optionType?: ProductOptionType;
   selectedDoneness: string;
   selectedSauce: string;
+  temperature?: string;
   addons: FirestoreOrderAddon[];
   note: string;
   itemSubtotal: number;

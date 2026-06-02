@@ -12,6 +12,7 @@ import type {
   FirestoreOrderStatus,
   FirestorePaymentStatus,
 } from "@/lib/orders";
+import { getOrderItemOptionLines } from "@/lib/product-options";
 
 type CustomerOrder = {
   orderNumber: string;
@@ -358,14 +359,14 @@ function OrderStatusContent() {
                   </span>
                   <span>${item.itemSubtotal}</span>
                 </div>
-                <p className="mt-1 text-xs text-[#7b6355]">
-                  {item.selectedDoneness}・{item.selectedSauce}
-                </p>
-                {item.addons.length > 0 ? (
-                  <p className="mt-1 text-xs text-[#7b6355]">
-                    加购：{item.addons.map((addon) => addon.name).join("、")}
+                {getOrderItemOptionLines(item).map((line) => (
+                  <p
+                    className="mt-1 text-xs text-[#7b6355]"
+                    key={`${item.productId}-${index}-${line}`}
+                  >
+                    {line}
                   </p>
-                ) : null}
+                ))}
                 {item.note ? (
                   <p className="mt-1 text-xs text-[#7b6355]">备注：{item.note}</p>
                 ) : null}

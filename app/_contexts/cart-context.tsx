@@ -7,6 +7,7 @@ import {
   useReducer,
   type ReactNode,
 } from "react";
+import type { ProductOptionType } from "@/lib/product-options";
 
 export type CartAddon = {
   name: string;
@@ -18,8 +19,10 @@ export type CartItem = {
   name: string;
   price: number;
   quantity: number;
+  optionType: ProductOptionType;
   selectedDoneness: string;
   selectedSauce: string;
+  temperature: string;
   addons: CartAddon[];
   note: string;
 };
@@ -57,8 +60,10 @@ export function getCartItemKey(item: CartItem) {
 
   return [
     item.id,
+    item.optionType,
     item.selectedDoneness,
     item.selectedSauce,
+    item.temperature,
     addonsKey,
     item.note.trim(),
   ].join("__");
@@ -73,6 +78,10 @@ function normalizeItem(item: CartItem): CartItem {
     ...item,
     addons: normalizeAddons(item.addons),
     note: item.note.trim(),
+    optionType: item.optionType || "other",
+    selectedDoneness: item.selectedDoneness || "",
+    selectedSauce: item.selectedSauce || "",
+    temperature: item.temperature || "",
     quantity: Math.max(1, item.quantity),
   };
 }

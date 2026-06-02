@@ -17,6 +17,7 @@ import type {
   FirestoreOrderItem,
   FirestoreOrderStatus,
 } from "@/lib/orders";
+import { getOrderItemOptionLines } from "@/lib/product-options";
 
 type KitchenStatus = Extract<FirestoreOrderStatus, "pending" | "cooking" | "ready">;
 
@@ -332,18 +333,8 @@ function KitchenOrderCard({
                 <span>{item.name}</span>
               </div>
               <p className="mt-2 text-base font-bold text-[#7b6355]">
-                {[item.selectedDoneness, item.selectedSauce]
-                  .filter(Boolean)
-                  .join(" / ") || "无规格"}
+                {getOrderItemOptionLines(item).join(" / ") || "无规格"}
               </p>
-              {item.addons.length > 0 ? (
-                <p className="mt-2 text-base font-bold text-[#7b6355]">
-                  加购：
-                  {item.addons
-                    .map((addon) => `${addon.name} +$${addon.price}`)
-                    .join("、")}
-                </p>
-              ) : null}
               {item.note ? (
                 <p className="mt-2 rounded-xl bg-white px-3 py-2 text-base font-bold text-[#8b3a14]">
                   备注：{item.note}

@@ -18,6 +18,7 @@ import type {
   FirestoreOrderStatus,
   FirestorePaymentStatus,
 } from "@/lib/orders";
+import { getOrderItemOptionLines } from "@/lib/product-options";
 
 type OrderStatus = FirestoreOrderStatus;
 type PaymentStatus = FirestorePaymentStatus;
@@ -127,6 +128,16 @@ function getOrderSummary(items: FirestoreOrderItem[] | undefined) {
   }
 
   return items.map((item) => `${item.name} x${item.quantity}`).join("、");
+}
+
+function getOrderItemSummary(item: FirestoreOrderItem) {
+  const optionLines = getOrderItemOptionLines(item);
+
+  return [
+    `${item.name} x${item.quantity}`,
+    ...optionLines,
+    item.note ? `备注：${item.note}` : "",
+  ].filter(Boolean);
 }
 
 function mapOrderDocument(id: string, data: FirestoreOrderData): AdminOrder {
@@ -342,7 +353,28 @@ export default function AdminOrdersPage() {
                       {order.createdAt}
                     </td>
                     <td className="max-w-sm px-4 py-4 align-top text-[#5b473c]">
-                      {order.summary}
+                      <div className="space-y-3">
+                        {order.items.length > 0 ? (
+                          order.items.map((item, index) => (
+                            <div key={`${order.id}-${item.productId}-${index}`}>
+                              {getOrderItemSummary(item).map((line, lineIndex) => (
+                                <p
+                                  className={
+                                    lineIndex === 0
+                                      ? "font-black text-[#241108]"
+                                      : "mt-1 text-xs font-bold text-[#7b6355]"
+                                  }
+                                  key={`${order.id}-${item.productId}-${index}-${line}`}
+                                >
+                                  {line}
+                                </p>
+                              ))}
+                            </div>
+                          ))
+                        ) : (
+                          order.summary
+                        )}
+                      </div>
                     </td>
                     <td className="max-w-xs px-4 py-4 align-top text-[#5b473c]">
                       {order.customerNote || "无"}

@@ -15,6 +15,14 @@ import { useCart } from "../_contexts/cart-context";
 import { useStoreSettings } from "../_hooks/use-store-settings";
 import { getValidTableNumber, withTableParam } from "../_utils/tables";
 import { db } from "@/lib/firebase";
+import {
+  drinkTemperatureOptions,
+  getAddonsForOptionType,
+  getProductOptionType,
+  steakDonenessOptions,
+  steakSauceOptions,
+  type ProductOptionType,
+} from "@/lib/product-options";
 
 type MenuCategory = {
   id: string;
@@ -40,6 +48,7 @@ type MenuItem = {
   price: number;
   imageUrl: string;
   isRecommended: boolean;
+  optionType: ProductOptionType;
   sortOrder: number;
 };
 
@@ -51,15 +60,9 @@ type FirestoreProductData = {
   imageUrl?: string;
   price?: number;
   isRecommended?: boolean;
+  optionType?: string;
   sortOrder?: number;
 };
-
-const donenessOptions = ["三分熟", "五分熟", "七分熟", "全熟"];
-const sauceOptions = ["黑胡椒酱", "蘑菇酱", "综合酱"];
-const addOnOptions = [
-  { name: "奶油玉米浓汤", price: 80 },
-  { name: "可乐", price: 30 },
-];
 
 function getStableCartId(id: string) {
   return Array.from(id).reduce(
@@ -90,6 +93,7 @@ function mapProductDocument(id: string, data: FirestoreProductData): MenuItem {
     description: data.description || "",
     imageUrl: data.imageUrl || "",
     price: typeof data.price === "number" ? data.price : 0,
+    optionType: getProductOptionType(data.optionType),
     isRecommended:
       typeof data.isRecommended === "boolean" ? data.isRecommended : false,
     sortOrder: typeof data.sortOrder === "number" ? data.sortOrder : 0,
@@ -130,8 +134,9 @@ function MenuContent() {
   const [activeCategory, setActiveCategory] = useState("全部");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
-  const [doneness, setDoneness] = useState("七分熟");
-  const [sauce, setSauce] = useState("黑胡椒酱");
+  const [doneness, setDoneness] = useState("七分");
+  const [sauce, setSauce] = useState("黑胡椒");
+  const [temperature, setTemperature] = useState("冰");
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [quantity, setQuantity] = useState(1);
@@ -202,8 +207,9 @@ function MenuContent() {
 
   const openProduct = (item: MenuItem) => {
     setSelectedItem(item);
-    setDoneness("七分熟");
-    setSauce("黑胡椒酱");
+    setDoneness("七分");
+    setSauce("黑胡椒");
+    setTemperature("冰");
     setSelectedAddOns([]);
     setNote("");
     setQuantity(1);
@@ -231,9 +237,11 @@ function MenuContent() {
       name: selectedItem.name,
       price: selectedItem.price,
       quantity,
-      selectedDoneness: doneness,
-      selectedSauce: sauce,
-      addons: addOnOptions.filter((option) =>
+      optionType: selectedItem.optionType,
+      selectedDoneness: selectedItem.optionType === "steak" ? doneness : "",
+      selectedSauce: selectedItem.optionType === "steak" ? sauce : "",
+      temperature: selectedItem.optionType === "drink" ? temperature : "",
+      addons: getAddonsForOptionType(selectedItem.optionType).filter((option) =>
         selectedAddOns.includes(option.name),
       ),
       note,
@@ -443,11 +451,13 @@ function MenuContent() {
           quantity={quantity}
           sauce={sauce}
           storeIsOpen={settings.isOpen}
+          temperature={temperature}
           onAddToCart={handleAddToCart}
           onClose={closeProduct}
           onNoteChange={setNote}
           onQuantityChange={setQuantity}
           onSauceChange={setSauce}
+          onTemperatureChange={setTemperature}
           onDonenessChange={setDoneness}
           onToggleAddOn={toggleAddOn}
         />
@@ -479,12 +489,14 @@ function ProductDetailSheet({
   quantity,
   sauce,
   storeIsOpen,
+  temperature,
   onAddToCart,
   onClose,
   onDonenessChange,
   onNoteChange,
   onQuantityChange,
   onSauceChange,
+  onTemperatureChange,
   onToggleAddOn,
 }: {
   addOns: string[];
@@ -494,15 +506,18 @@ function ProductDetailSheet({
   quantity: number;
   sauce: string;
   storeIsOpen: boolean;
+  temperature: string;
   onAddToCart: () => void;
   onClose: () => void;
   onDonenessChange: (value: string) => void;
   onNoteChange: (value: string) => void;
   onQuantityChange: (value: number) => void;
   onSauceChange: (value: string) => void;
+  onTemperatureChange: (value: string) => void;
   onToggleAddOn: (value: string) => void;
 }) {
-  const addOnTotal = addOnOptions
+  const addonOptions = getAddonsForOptionType(item.optionType);
+  const addOnTotal = addonOptions
     .filter((option) => addOns.includes(option.name))
     .reduce((sum, option) => sum + option.price, 0);
   const total = (item.price + addOnTotal) * quantity;
@@ -537,38 +552,57 @@ function ProductDetailSheet({
 
         <ProductArtwork item={item} variant="detail" />
 
-        <OptionGroup title="熟度选择">
-          {donenessOptions.map((option) => (
-            <OptionButton
-              key={option}
-              active={doneness === option}
-              label={option}
-              onClick={() => onDonenessChange(option)}
-            />
-          ))}
-        </OptionGroup>
+        {item.optionType === "steak" ? (
+          <>
+            <OptionGroup title="熟度选择">
+              {steakDonenessOptions.map((option) => (
+                <OptionButton
+                  key={option}
+                  active={doneness === option}
+                  label={option}
+                  onClick={() => onDonenessChange(option)}
+                />
+              ))}
+            </OptionGroup>
 
-        <OptionGroup title="酱料选择">
-          {sauceOptions.map((option) => (
-            <OptionButton
-              key={option}
-              active={sauce === option}
-              label={option}
-              onClick={() => onSauceChange(option)}
-            />
-          ))}
-        </OptionGroup>
+            <OptionGroup title="酱料选择">
+              {steakSauceOptions.map((option) => (
+                <OptionButton
+                  key={option}
+                  active={sauce === option}
+                  label={option}
+                  onClick={() => onSauceChange(option)}
+                />
+              ))}
+            </OptionGroup>
+          </>
+        ) : null}
 
-        <OptionGroup title="加购选择">
-          {addOnOptions.map((option) => (
-            <OptionButton
-              key={option.name}
-              active={addOns.includes(option.name)}
-              label={`${option.name} +${option.price}`}
-              onClick={() => onToggleAddOn(option.name)}
-            />
-          ))}
-        </OptionGroup>
+        {item.optionType === "drink" ? (
+          <OptionGroup title="温度选择">
+            {drinkTemperatureOptions.map((option) => (
+              <OptionButton
+                key={option}
+                active={temperature === option}
+                label={option}
+                onClick={() => onTemperatureChange(option)}
+              />
+            ))}
+          </OptionGroup>
+        ) : null}
+
+        {addonOptions.length > 0 ? (
+          <OptionGroup title="加购选择">
+            {addonOptions.map((option) => (
+              <OptionButton
+                key={option.name}
+                active={addOns.includes(option.name)}
+                label={`${option.name} +${option.price}`}
+                onClick={() => onToggleAddOn(option.name)}
+              />
+            ))}
+          </OptionGroup>
+        ) : null}
 
         <label className="mt-5 block">
           <span className="text-sm font-black">备注</span>

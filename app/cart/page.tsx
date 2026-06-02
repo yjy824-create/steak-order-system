@@ -9,6 +9,7 @@ import { useOrder } from "../_contexts/order-context";
 import { useStoreSettings } from "../_hooks/use-store-settings";
 import { getValidTableNumber } from "../_utils/tables";
 import { createOrder } from "@/lib/orders";
+import { getOrderItemOptionLines } from "@/lib/product-options";
 
 function getItemSubtotal(item: CartItem) {
   const addonsTotal = item.addons.reduce((sum, addon) => sum + addon.price, 0);
@@ -85,8 +86,10 @@ function CartContent() {
       name: item.name,
       price: item.price,
       quantity: item.quantity,
+      optionType: item.optionType,
       selectedDoneness: item.selectedDoneness,
       selectedSauce: item.selectedSauce,
+      temperature: item.temperature,
       addons: item.addons,
       note: item.note,
       itemSubtotal: getItemSubtotal(item),
@@ -197,6 +200,7 @@ function CartContent() {
             {items.map((item) => {
               const itemKey = getCartItemKey(item);
               const itemSubtotal = getItemSubtotal(item);
+              const optionLines = getOrderItemOptionLines(item);
 
               return (
                 <article
@@ -211,9 +215,13 @@ function CartContent() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <h3 className="font-bold">{item.name}</h3>
-                          <p className="mt-1 text-sm text-[#7b6355]">
-                            {item.selectedDoneness}・{item.selectedSauce}
-                          </p>
+                          {optionLines.length > 0 ? (
+                            <div className="mt-1 space-y-1 text-sm text-[#7b6355]">
+                              {optionLines.map((line) => (
+                                <p key={`${itemKey}-${line}`}>{line}</p>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                         <button
                           className="text-sm font-bold text-[#8b3a14]"
@@ -223,16 +231,6 @@ function CartContent() {
                           删除
                         </button>
                       </div>
-
-                      {item.addons.length > 0 ? (
-                        <div className="mt-2 space-y-1 text-sm text-[#7b6355]">
-                          {item.addons.map((addon) => (
-                            <p key={`${itemKey}-${addon.name}`}>
-                              加购：{addon.name} +${addon.price}
-                            </p>
-                          ))}
-                        </div>
-                      ) : null}
 
                       {item.note ? (
                         <p className="mt-2 rounded-xl bg-[#fbf4ed] px-3 py-2 text-sm text-[#7b6355]">

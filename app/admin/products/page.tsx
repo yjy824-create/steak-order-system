@@ -15,6 +15,12 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { AdminShell } from "../_components/admin-shell";
 import { db } from "@/lib/firebase";
+import {
+  getProductOptionType,
+  productOptionTypes,
+  productOptionTypeLabels,
+  type ProductOptionType,
+} from "@/lib/product-options";
 
 type ProductFilter = "all" | "available" | "unavailable" | "recommended";
 
@@ -26,6 +32,7 @@ type Product = {
   price: number;
   description: string;
   imageUrl: string;
+  optionType: ProductOptionType;
   isAvailable: boolean;
   isRecommended: boolean;
   sortOrder: number;
@@ -40,6 +47,7 @@ type FirestoreProductData = {
   price?: number;
   description?: string;
   imageUrl?: string;
+  optionType?: string;
   isAvailable?: boolean;
   isRecommended?: boolean;
   sortOrder?: number;
@@ -67,6 +75,7 @@ type ProductForm = {
   price: string;
   description: string;
   imageUrl: string;
+  optionType: ProductOptionType;
   sortOrder: string;
   isAvailable: boolean;
   isRecommended: boolean;
@@ -86,6 +95,7 @@ const emptyForm: ProductForm = {
   price: "",
   description: "",
   imageUrl: "",
+  optionType: "other",
   sortOrder: "",
   isAvailable: true,
   isRecommended: false,
@@ -117,6 +127,7 @@ function mapProductDocument(id: string, data: FirestoreProductData): Product {
     price: typeof data.price === "number" ? data.price : 0,
     description: data.description || "",
     imageUrl: data.imageUrl || "",
+    optionType: getProductOptionType(data.optionType),
     isAvailable:
       typeof data.isAvailable === "boolean" ? data.isAvailable : true,
     isRecommended:
@@ -150,6 +161,7 @@ function productToForm(product: Product): ProductForm {
     price: String(product.price),
     description: product.description,
     imageUrl: product.imageUrl,
+    optionType: product.optionType,
     sortOrder: String(product.sortOrder),
     isAvailable: product.isAvailable,
     isRecommended: product.isRecommended,
@@ -387,6 +399,7 @@ export default function AdminProductsPage() {
         price,
         description: form.description.trim(),
         imageUrl: form.imageUrl.trim(),
+        optionType: form.optionType,
         isAvailable: form.isAvailable,
         isRecommended: form.isRecommended,
         sortOrder,
@@ -527,6 +540,7 @@ export default function AdminProductsPage() {
                     "商品图片",
                     "商品名称",
                     "分类",
+                    "选项类型",
                     "排序",
                     "价格",
                     "上架状态",
@@ -552,6 +566,9 @@ export default function AdminProductsPage() {
                       </p>
                     </td>
                     <td className="px-4 py-3">{product.category}</td>
+                    <td className="px-4 py-3 font-bold text-[#5b473c]">
+                      {productOptionTypeLabels[product.optionType]}
+                    </td>
                     <td className="px-4 py-3 font-black">{product.sortOrder}</td>
                     <td className="px-4 py-3 font-black">${product.price}</td>
                     <td className="px-4 py-3">
@@ -791,6 +808,27 @@ function ProductModal({
               placeholder="可先留空"
               value={form.imageUrl}
             />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-black">商品选项类型</span>
+            <select
+              className="mt-2 h-11 w-full rounded-xl border border-[#ead8c8] px-4 outline-none disabled:bg-[#f7f2ed]"
+              disabled={isFormDisabled}
+              onChange={(event) =>
+                onChange({
+                  ...form,
+                  optionType: getProductOptionType(event.target.value),
+                })
+              }
+              value={form.optionType}
+            >
+              {productOptionTypes.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}（{option.value}）
+                </option>
+              ))}
+            </select>
           </label>
 
           <div className="md:col-span-2 rounded-2xl border border-[#ead8c8] bg-[#fffaf5] p-4">
