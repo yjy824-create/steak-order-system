@@ -2,7 +2,13 @@ import type { ReactNode } from "react";
 import { AdminSidebar } from "./admin-sidebar";
 import { AdminAuthProvider } from "../_contexts/admin-auth-context";
 
-type AdminNavKey = "dashboard" | "kitchen" | "orders" | "products" | "categories";
+type AdminNavKey =
+  | "dashboard"
+  | "kitchen"
+  | "orders"
+  | "products"
+  | "categories"
+  | "settings";
 
 export function AdminShell({
   active,

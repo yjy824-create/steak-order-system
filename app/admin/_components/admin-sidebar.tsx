@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { useAdminAuth } from "../_contexts/admin-auth-context";
 
-type AdminNavKey = "dashboard" | "kitchen" | "orders" | "products" | "categories";
+type AdminNavKey =
+  | "dashboard"
+  | "kitchen"
+  | "orders"
+  | "products"
+  | "categories"
+  | "settings";
 
 const navItems: Array<{ key: AdminNavKey; href: string; label: string; mark: string }> = [
   { key: "dashboard", href: "/admin", label: "首页", mark: "首" },
@@ -15,6 +21,7 @@ const navItems: Array<{ key: AdminNavKey; href: string; label: string; mark: str
 
 export function AdminSidebar({ active }: { active: AdminNavKey }) {
   const { logout } = useAdminAuth();
+  const isSettingsActive = active === "settings";
 
   return (
     <aside className="flex min-h-screen w-64 shrink-0 flex-col bg-[linear-gradient(160deg,#2b160d,#130b07)] px-5 py-6 text-[#f8eadc]">
@@ -54,12 +61,23 @@ export function AdminSidebar({ active }: { active: AdminNavKey }) {
       </nav>
 
       <div className="mt-auto space-y-2 border-t border-white/10 pt-5 text-sm">
-        <button className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold text-[#e5cbb2] hover:bg-white/10" type="button">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#3b2417] text-xs">
+        <Link
+          className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold transition ${
+            isSettingsActive
+              ? "bg-[#704221] text-white shadow-lg shadow-black/20"
+              : "text-[#e5cbb2] hover:bg-white/10"
+          }`}
+          href="/admin/settings"
+        >
+          <span
+            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs ${
+              isSettingsActive ? "bg-white/15" : "bg-[#3b2417]"
+            }`}
+          >
             设
           </span>
-          设置
-        </button>
+          店铺设置
+        </Link>
         <button
           className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold text-[#e5cbb2] hover:bg-white/10"
           onClick={logout}
