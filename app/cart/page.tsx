@@ -62,7 +62,9 @@ function CartContent() {
     isLoading: isSettingsLoading,
     settings,
   } = useStoreSettings();
-  const [diningType, setDiningType] = useState("内用");
+  const [manualDiningType, setManualDiningType] = useState<"内用" | "外带">(
+    "内用",
+  );
   const [manualTableNumber, setManualTableNumber] = useState("A5 桌");
   const [orderNote, setOrderNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -71,6 +73,7 @@ function CartContent() {
   const serviceFee = Math.round(subtotal * serviceFeeRate);
   const total = Math.round(subtotal + serviceFee);
   const serviceFeePercent = Math.round(serviceFeeRate * 100);
+  const diningType = urlTableNumber ? "内用" : manualDiningType;
   const tableNumber = urlTableNumber || manualTableNumber;
 
   const handleSubmitOrder = async () => {
@@ -290,30 +293,37 @@ function CartContent() {
             <h2 className="font-bold">用餐方式</h2>
             <div className="mt-3 grid grid-cols-2 gap-3">
               <button
+                aria-pressed={diningType === "内用"}
                 className={`rounded-2xl border px-4 py-3 font-bold ${
                   diningType === "内用"
                     ? "border-[#5a210b] bg-white text-[#5a210b]"
                     : "border-[#ead8c8] bg-white text-[#7b6355]"
                 }`}
-                disabled={isSubmitting}
-                onClick={() => setDiningType("内用")}
+                disabled={isSubmitting || Boolean(urlTableNumber)}
+                onClick={() => setManualDiningType("内用")}
                 type="button"
               >
                 内用
               </button>
               <button
+                aria-pressed={diningType === "外带"}
                 className={`rounded-2xl border px-4 py-3 font-bold ${
-                  diningType === "外带自取"
+                  diningType === "外带"
                     ? "border-[#5a210b] bg-white text-[#5a210b]"
                     : "border-[#ead8c8] bg-white text-[#7b6355]"
                 }`}
-                disabled={isSubmitting}
-                onClick={() => setDiningType("外带自取")}
+                disabled={isSubmitting || Boolean(urlTableNumber)}
+                onClick={() => setManualDiningType("外带")}
                 type="button"
               >
-                外带自取
+                外带
               </button>
             </div>
+            {urlTableNumber ? (
+              <p className="mt-2 text-xs font-bold text-[#8b7565]">
+                桌号点餐模式已自动设为内用。
+              </p>
+            ) : null}
           </div>
 
           <label className="block">
